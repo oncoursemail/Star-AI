@@ -22,7 +22,12 @@ MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 500
 MAX_PROMPT_CHARS = 2400
 MAX_REQUEST_CHARS = 1500
-MAX_ANSWER_CHARS = 4000
+# Keep full checked implementations, including multi-function worked examples.
+# Storage limits are separate from the unchanged per-turn retrieval budget.
+MAX_ANSWER_CHARS = 64_000
+# JSON can expand one Unicode character to a pair of six-character escapes.
+# Allow that worst case plus metadata while retaining a bounded row/file size.
+MAX_ROW_CHARS = 1024 * 1024
 MIN_SCORE = 0.6
 _ROW_KEYS = frozenset(("id", "group_id", "task_category", "instruction", "response", "evidence",
                        "source", "reviewed", "rights_confirmed", "lessons_in_context"))
@@ -93,7 +98,7 @@ def parse_export(raw: bytes) -> list[Example]:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeError as exc:
         raise ValueError("Worked examples must be UTF-8") from exc
-    if not lines or len(lines) > MAX_ROWS or any(not line.strip() or len(line) > 15_000 for line in lines):
+    if not lines or len(lines) > MAX_ROWS or any(not line.strip() or len(line) > MAX_ROW_CHARS for line in lines):
         raise ValueError("Invalid worked-example row count or length")
     found, seen = [], set()
     for line in lines:

@@ -551,21 +551,26 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
 
         state = {"lessons": {"L1": {"id": "L1", "text": fake.LESSON, "status": "active", "promotion": {
             "fixed_tasks": ["P-01", "P-02"], "validation_before": "1/2", "validation_with": "2/2"}}}}
+        from star.worked_examples import MAX_ANSWER_CHARS, import_file
+        large_answer = "local x = 1\n" * 1500
         (settings.data / "examples.jsonl").write_text(json.dumps({
             "task": "P-01", "category": "luau", "prompt": task["prompt"], "answer": again.answer,
             "checks": ["luau_block"], "lessons": ["L1"]}) + "\n" + json.dumps({
-            "task": "P-02", "category": "luau", "prompt": task["prompt"], "answer": "local x = 1\n" * 500,
+            "task": "P-02", "category": "luau", "prompt": task["prompt"], "answer": large_answer,
+            "checks": ["luau_block"], "lessons": []}) + "\n" + json.dumps({
+            "task": "P-03", "category": "luau", "prompt": task["prompt"], "answer": "local x = 1\n" * MAX_ANSWER_CHARS,
             "checks": ["luau_block"], "lessons": []}) + "\n", encoding="utf-8")
-        # The answer over the importer's limit is left out, so the file imports as it is.
-        assert export_outbox(settings, state) == {"lessons": 1, "examples": 1}
-        from star.worked_examples import import_file
+        # Large checked answers survive the outbox; only the answer over the new cap is left out.
+        assert export_outbox(settings, state) == {"lessons": 1, "examples": 2}
         assert import_file(settings.outbox / "worked-examples.jsonl", home=tmp_path / "app-home",
-                           project="STAR")["imported"] == 1
+                           project="STAR")["imported"] == 2
         exported = json.loads((settings.outbox / "star-lessons-night-school.json").read_text(encoding="utf-8"))
         assert exported["format"] == "star-lessons-v1" and exported["lessons"][0]["text"] == fake.LESSON
         assert exported["lessons"][0]["status"] == "candidate" and "validation" in exported["lessons"][0]["evidence"]
-        row = json.loads((settings.outbox / "worked-examples.jsonl").read_text(encoding="utf-8"))
-        assert row["reviewed"] is False and row["instruction"] == task["prompt"]
+        rows = [json.loads(line) for line in (settings.outbox / "worked-examples.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert {row["group_id"] for row in rows} == {"P-01", "P-02"}
+        assert rows[1]["response"] == large_answer
+        assert all(row["reviewed"] is False and row["instruction"] == task["prompt"] for row in rows)
         assert "next release" in (settings.outbox / "README.txt").read_text(encoding="utf-8")
         model.close()
         assert not providers.open_client.__qualname__.startswith("pin_slots")      # the app's own factory is back
