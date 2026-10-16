@@ -17,6 +17,7 @@ from pathlib import Path
 from star import resource_probes as probes
 
 PROTECTED_MARKERS = ("paintball", os.path.join("appdata", "roaming", "star").lower())
+_WORKTREE_ADD = threading.Lock()  # concurrent `git worktree add` on one repo races on git lock files
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 
 
@@ -128,7 +129,8 @@ def run_task(repo: Path, base_ref: str, task: FleetTask, worktrees: Path, cancel
     wt = worktrees / task.task_id
     rec.worktree = str(wt)
     try:
-        add = _git(repo, "worktree", "add", "-b", rec.branch, str(wt), base_ref)
+        with _WORKTREE_ADD:
+            add = _git(repo, "worktree", "add", "-b", rec.branch, str(wt), base_ref)
         if add.returncode:
             rec.detail = add.stderr.strip()[-300:]
             return rec
