@@ -1678,7 +1678,8 @@ class Lab:
             name = f"{label}-{camera['id']}.{'jpg' if 'jpeg' in mime else 'png'}"
             (folder / name).write_bytes(data)
             shots.append({"camera": camera["id"], "ok": True, "file": name, "mime": mime, "bytes": len(data),
-                          "sha256": digest(data), "position": camera["position"], "look_at": camera["look_at"]})
+                          "sha256": digest(data), "position": camera["position"], "look_at": camera["look_at"],
+                          "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
         return shots
 
     async def run(self, spec: dict, *, run: str | None = None) -> dict:
@@ -1697,6 +1698,8 @@ class Lab:
             token = run + secrets.token_hex(2)    # a token per playtest: the output keeps earlier sessions' lines
             step = {"index": index, "plan_hash": digest(plan), "token": token}
             report["iterations"].append(step)
+            from .discord_bot.native_evidence import emit
+            emit("studio-lab", report, self.out)
             dry = map_plan.dry_run(plan, include_operations=False)
             step["dry_run"] = {"ok": dry["ok"], "blockers": dry["blockers"], "warnings": dry["warnings"]}
             if not dry["ok"]:
@@ -1712,6 +1715,7 @@ class Lab:
             self.log(f"[{index}] verify: ok={step['verify']['ok']} problems={step['verify'].get('problems')}")
             step["screenshots"] = await self.look(plan, folder, f"it{index}")
             self.log(f"[{index}] screenshots: {sum(1 for s in step['screenshots'] if s['ok'])}/{len(step['screenshots'])}")
+            emit("studio-lab", report, self.out, phase="playtesting")
             step["playtest"] = await self.playtest(token, spec["playSeconds"], folder)
             step["probe"] = step["playtest"]["probe"]
             self.log(f"[{index}] playtest: ok={step['playtest']['ok']} legs="
@@ -1738,6 +1742,8 @@ class Lab:
         report["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         report["lesson"] = lesson_record(report)
         (self.out / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+        from .discord_bot.native_evidence import emit
+        emit("studio-lab", report, self.out)
         return report
 
 
@@ -1913,7 +1919,8 @@ class UiLab(Lab):
                 data, mime = images[0]
                 name = f"ui-it{index}-{device}.{'jpg' if 'jpeg' in mime else 'png'}"
                 (self.out / name).write_bytes(data)
-                entry["screenshot"] = {"ok": True, "file": name, "bytes": len(data), "sha256": digest(data)}
+                entry["screenshot"] = {"ok": True, "file": name, "bytes": len(data), "sha256": digest(data),
+                                       "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
             else:
                 entry["screenshot"] = {"ok": False, "detail": _text(shot)[:200]}
             devices.append(entry)
@@ -1934,10 +1941,13 @@ class UiLab(Lab):
         try:
             for index in range(1, limit + 1):
                 ok, applied = await self._ui(ui_apply_luau(current, run))
-                step = {"index": index, "apply": {"ok": ok and applied.get("run") == run and bool(applied.get("made")),
+                step = {"index": index, "build_spec": current["ui"],
+                        "apply": {"ok": ok and applied.get("run") == run and bool(applied.get("made")),
                                                   **applied}, "devices": [], "problems": [], "fixes": [],
                         "passed": False}
                 report["iterations"].append(step)
+                from .discord_bot.native_evidence import emit
+                emit("studio-ui", report, self.out, phase="inspecting")
                 report["apply"] = step["apply"]
                 self.log(f"[ui {index}] apply: {step['apply']}")
                 if not step["apply"]["ok"]:
@@ -1971,6 +1981,8 @@ class UiLab(Lab):
         report["lesson"] = ui_lesson_record(report)
         report["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         (self.out / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+        from .discord_bot.native_evidence import emit
+        emit("studio-ui", report, self.out)
         return report
 
 

@@ -699,10 +699,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
     @owner_contexts
     @bot.tree.command(name="compare", description="Compare a reference with STAR's result (private)")
     @app_commands.describe(reference="Desired reference PNG/JPG/WebP",
-                           result="STAR's current result PNG/JPG/WebP",
+                           result="STAR's result PNG/JPG/WebP; omit to use the current native Lab capture",
                            instruction="What should STAR change or preserve?")
     async def compare_top(interaction: discord.Interaction, reference: discord.Attachment,
-                          result: discord.Attachment, instruction: str = ""):
+                          result: discord.Attachment | None = None, instruction: str = ""):
         key = await permit(interaction)
         if key is None:
             return
@@ -713,14 +713,18 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         try:
             photos = []
             for attachment in (reference, result):
+                if attachment is None:
+                    continue
                 if not 0 < (attachment.size or 0) <= MAX_IMAGE_BYTES:
                     raise ValueError("Each comparison image must be nonempty and at most 6 MiB")
                 payload = await attachment.read()
                 photos.append(prepare_discord_image(
                     attachment.filename, attachment.content_type, attachment.size, payload))
-            answer = await service.compare_images(
-                key, instruction or "Identify mismatches and propose a reference-guided revision.",
-                photos[0], photos[1])
+            prompt = instruction or "Identify mismatches and propose a reference-guided revision."
+            if result is None:
+                answer = await service.compare_lab_reference(key, prompt, photos[0], config.lab)
+            else:
+                answer = await service.compare_images(key, prompt, photos[0], photos[1])
             await publish_answer(interaction, answer, ephemeral=True, key=key)
         except Exception as exc:
             await handle_failure(interaction, exc)

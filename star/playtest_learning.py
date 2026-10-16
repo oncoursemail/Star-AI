@@ -531,6 +531,8 @@ class GameRun:
             folder.mkdir(parents=True, exist_ok=True)
             step: dict[str, Any] = {"index": index, "task": "build" if index == 1 else "fix"}
             report["iterations"].append(step)
+            from .discord_bot.native_evidence import emit
+            emit("playtest-learning", report, self.out, phase="planning")
             if index > 1:
                 messages = fix_messages(spec, answer_text, report["iterations"][-2]["report"])
             answer = await asyncio.to_thread(self._ask, messages, folder, step["task"])
@@ -541,6 +543,7 @@ class GameRun:
                 self.log(f"[{index}] brain call failed: {answer.get('error')}")
                 break
             answer_text, parsed = answer["text"], parse_answer(answer["text"])
+            step["build_sha256"] = digest(parsed["scripts"])
             step["scripts"] = [{"name": s["name"], "lines": s["source"].count("\n"), "sha256": digest(s["source"])[:16]}
                                for s in parsed["scripts"]]
             step["lesson"] = parsed["lesson"]
@@ -559,6 +562,7 @@ class GameRun:
                                                                      "why": step["apply"]["detail"]}], "game_failures": 0}
                     report["studio_problem"] = True     # GuardedStudio refuses later edits until a person looks
                     break
+                emit("playtest-learning", report, self.out, phase="playtesting")
                 play = await self.playtest(spec, token, folder)
                 step["playtest"] = {k: play.get(k) for k in ("started", "stopped", "seconds", "errors", "detail", "start_s",
                                                               "robot_start_s", "edit")}
@@ -583,6 +587,8 @@ class GameRun:
         report["finished"] = _now()
         report["lesson"] = lesson_record(report)
         (self.out / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+        from .discord_bot.native_evidence import emit
+        emit("playtest-learning", report, self.out)
         return report
 
 
