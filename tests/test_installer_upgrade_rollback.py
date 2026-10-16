@@ -51,7 +51,7 @@ def test_the_old_runtime_is_never_deleted_before_the_new_one_is_copied():
     install = _routine(code, "procedure CurStepChanged")
     moving = install.split("ssPostInstall", 1)[0]
     assert "MoveAside(RuntimeDir)" in moving and "MoveAside('{#STARExe}')" in moving
-    assert "DelTree(" not in moving.replace("RemoveLeftover", "")  # nothing live is deleted while moving aside
+    assert "DelTree(" not in moving  # nothing live is deleted while moving aside
     move = _routine(code, "function MoveAside")
     assert "RenameFile(AppFolder + '\\' + Name, KeptPath(Name))" in move
     assert re.search(r"for Attempt := 1 to \d+ do", move) and "Sleep(" in move   # a closing STAR gets a few seconds
@@ -64,10 +64,10 @@ def test_setup_stops_and_changes_nothing_while_a_runtime_file_is_open():
     assert re.search(r"if not MoveAside\(RuntimeDir\) then\s+RefuseWhileRunning;", install)
     # The exe could not move: the runtime that did move goes back first, then Setup refuses.
     exe_failure = install.split("if not MoveAside('{#STARExe}') then", 1)[1].split("ExeMoved := True", 1)[0]
-    assert exe_failure.index("PutBack(RuntimeDir)") < exe_failure.index("RuntimeMoved := False") \
-        < exe_failure.index("RefuseWhileRunning")
+    assert "RuntimeMoved := not PutBack(RuntimeDir);" in exe_failure
+    assert exe_failure.index("PutBack(RuntimeDir)") < exe_failure.index("RefuseWhileRunning")
     refuse = _routine(code, "procedure RefuseWhileRunning")
-    assert "SuppressibleMsgBox(" in refuse and "Nothing was changed" in refuse
+    assert "SuppressibleMsgBox(" in refuse and "Setup stopped before copying new files" in refuse
     assert refuse.rstrip().endswith("Abort;\nend;")      # Abort in ssInstall ends Setup before any file is copied
     # Restart Manager still gets the first chance to close STAR (it runs before ssInstall).
     setup = _active(_section("Setup"))
@@ -81,17 +81,22 @@ def test_a_failed_installation_puts_the_old_runtime_back_and_a_finished_one_remo
     assert "DeleteFile(KeptPath('{#STARExe}'))" in finish
     restore = _routine(code, "procedure DeinitializeSetup")
     assert re.search(r"if InstallFinished then\s+Exit;", restore)
-    assert re.search(r"if RuntimeMoved then\s+PutBack\(RuntimeDir\);", restore)
-    assert re.search(r"if ExeMoved then\s+PutBack\('\{#STARExe\}'\);", restore)
-    put_back = _routine(code, "procedure PutBack")
+    assert re.search(r"if RuntimeMoved then\s+RuntimeMoved := not PutBack\(RuntimeDir\);", restore)
+    assert re.search(r"if ExeMoved then\s+ExeMoved := not PutBack\('\{#STARExe\}'\);", restore)
+    assert "if RuntimeMoved or ExeMoved then" in restore
+    assert "Setup could not restore" in restore
+    put_back = _routine(code, "function PutBack")
     assert put_back.index("DelTree(Live") < put_back.index("RenameFile(KeptPath(Name), Live)")
 
 
-def test_leftovers_of_a_killed_setup_are_cleaned_up():
+def test_leftovers_of_a_killed_setup_are_preserved_before_any_moves():
     code = _without_comments(_section("Code"))
     install = _routine(code, "procedure CurStepChanged").split("ssPostInstall", 1)[0]
-    assert install.index("RemoveLeftover(RuntimeDir)") < install.index("MoveAside(RuntimeDir)")
-    assert install.index("RemoveLeftover('{#STARExe}')") < install.index("MoveAside('{#STARExe}')")
+    assert install.index("CheckLeftover(RuntimeDir)") < install.index("MoveAside(RuntimeDir)")
+    assert install.index("CheckLeftover('{#STARExe}')") < install.index("MoveAside(RuntimeDir)")
+    check = _routine(code, "procedure CheckLeftover")
+    assert "DirExists(Path) or FileExists(Path)" in check and "Abort;" in check
+    assert "DelTree" not in check and "DeleteFile" not in check
     uninstall = _active(_section("UninstallDelete"))
     assert 'Type: filesandordirs; Name: "{app}\\_internal.star-previous"' in uninstall
     assert 'Type: files; Name: "{app}\\{#STARExe}.star-previous"' in uninstall
@@ -104,6 +109,19 @@ def test_the_code_only_ever_deletes_the_runtime_or_its_kept_copy():
     assert "userappdata" not in code.lower() and "{localappdata}" not in code.lower()
     deleted = re.findall(r"(?:DelTree|DeleteFile)\(((?:KeptPath\([^)]*\))|[^,)]+)", code)
     assert deleted and set(deleted) <= {"Path", "Live", "KeptPath(RuntimeDir)", "KeptPath('{#STARExe}')"}
-    assert set(re.findall(r"(?:RemoveLeftover|PutBack|MoveAside)\(([^)]*)\)", code)) <= {
+    assert set(re.findall(r"(?:CheckLeftover|PutBack|MoveAside)\(([^)]*)\)", code)) <= {
         "RuntimeDir", "'{#STARExe}'", "const Name: String"}
     assert "AppFolder := ExpandConstant('{app}');" in code
+
+
+def test_loaded_executable_and_runtime_are_checked_before_either_is_moved():
+    code = _without_comments(_section("Code"))
+    install = _routine(code, "procedure CurStepChanged").split("ssPostInstall", 1)[0]
+    for target in ("AppFolder + '\\{#STARExe}'", "AppFolder + '\\' + RuntimeDir"):
+        assert f"if not RuntimeAvailable({target}) then\n      RefuseWhileRunning;" in install
+        assert install.index(f"RuntimeAvailable({target})") < install.index("MoveAside(RuntimeDir)")
+    check = _routine(code, "function RuntimeAvailable")
+    assert "TFileStream.Create(Path, $0012)" in check  # existing file, exclusive read/write, never create/truncate
+    assert "Stream.Free;" in check and "except" in check
+    assert "RuntimeAvailable(Path + '\\' + Found.Name)" in check
+    assert "Found.Attributes and $400" in check  # refuse reparse points instead of following them
