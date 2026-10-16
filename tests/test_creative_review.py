@@ -87,7 +87,10 @@ def test_invalid_evidence_fails_closed(tmp_path, bad):
 
 def test_screenshot_symlink_refused(tmp_path):
     manifest = _fixture(tmp_path)
-    (tmp_path / "shortcut.png").symlink_to(tmp_path / "wide.png")
+    try:
+        (tmp_path / "shortcut.png").symlink_to(tmp_path / "wide.png")
+    except OSError:
+        pytest.skip("Symlinks need Developer Mode or admin on Windows")
     manifest["views"]["desktop"]["file"] = "shortcut.png"
     with pytest.raises(ValueError, match="symlink"):
         capture_evidence(tmp_path, manifest)
