@@ -54,6 +54,7 @@ def bridge(settings_file, monkeypatch):
     instance.active_task = False
     instance.turn = None
     instance.warmer = Mock()
+    instance.draft_warmer = Mock()
     instance.digester = Mock()
     instance._warm = Mock()
 

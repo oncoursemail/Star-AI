@@ -38,6 +38,7 @@ import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
 import {instant,pageFade} from './motion'
+import {useDraftWarm} from './draftWarm'
 import {MotionPolicy,useEffectiveReducedMotion} from './MotionPolicy'
 import {MotionSurface} from './MotionSurface'
 import type {Fixture,FixtureScript} from './previewFixtures'
@@ -219,7 +220,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      running.current.delete(requestId)
      lastError.current=result.error||'STAR could not complete this action.'
      // A chat request that fails to start is explained inline, next to the message it belongs to.
-     if(!CHAT_ACTIONS.includes(action)&&action!=='warmUp')setNotice(lastError.current)
+     if(!CHAT_ACTIONS.includes(action)&&action!=='warmUp'&&action!=='warmDraft')setNotice(lastError.current)
      return null
    }
    if(result.pending)return result
@@ -385,6 +386,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    warmedTarget.current=warmTarget
    void act('warmUp')
  },[inactive,act,warmTarget,data.settings.model])
+ // Settings > Start thinking while I type: after a pause the host lets the server read the draft (star/prefill_warm.py).
+ useDraftWarm(data.settings.prefill_while_typing===true&&!inactive&&!busy&&!imageMode&&!teamMode&&files.length===0,prompt,
+   text=>{void act('warmDraft',{prompt:text,mode:chatMode,research})})
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
    answeringChat.current=chatRef.current

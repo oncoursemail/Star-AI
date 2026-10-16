@@ -199,6 +199,7 @@ class GpuHelper:
         self.process = None
         self.base = ""
         self.in_flight = 0
+        self.warms = 0                # draft warm-ups on the PC right now (star/prefill_warm.py), not leases
         self.started_at = self.last_used = self.since = 0.0
         self.want_start = False
         self.hot_ticks = 0
@@ -279,6 +280,24 @@ class GpuHelper:
         self._wake.set()
         return None
 
+    def warm_begin(self) -> str | None:
+        """The PC server's address for a draft warm-up when it is loaded and answering nothing, else None.
+
+        Not a lease (star/prefill_warm.py): the real turn still finds the PC free and queues behind the short
+        warm-up there; a model that is not loaded is never started for it. While it runs the card is busy
+        with STAR's own work, so the watchdog does not take it for another program. End with `warm_end()`."""
+        with self._lock:
+            if self.enabled and self.state == "ready" and self.in_flight == 0 and self._alive():
+                self.warms += 1
+                self.last_used = self._clock()
+                return self.base
+            return None
+
+    def warm_end(self) -> None:
+        with self._lock:
+            self.warms = max(0, self.warms - 1)
+            self.last_used = self._clock()
+
     def finish(self, *, ok: bool, reason: str = "", hard: bool = False, tokens_per_second: float | None = None):
         """End of a leased request. `hard`: the PC server itself failed (connection, timeout); it is stopped."""
         with self._lock:
@@ -353,7 +372,7 @@ class GpuHelper:
                         self._stop_locked()
                         self._set("failed", f"the model did not load within {int(LOAD_SECONDS // 60)} minutes")
                     return
-                if self.in_flight:
+                if self.in_flight or self.warms:
                     return
                 problem = self._card_problem(loaded=True)
                 if problem:

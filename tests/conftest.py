@@ -60,6 +60,7 @@ def _offline_slot_probe(monkeypatch):
     def clear():
         providers._BUSY_SLOTS.clear()
         providers._NO_SLOTS_PAGE.clear()
+        providers._OWN_WARMS.clear()
     clear()
     monkeypatch.delenv("STAR_SERVER_SLOT_PROBE", raising=False)
     monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(lambda request: httpx.Response(404)))

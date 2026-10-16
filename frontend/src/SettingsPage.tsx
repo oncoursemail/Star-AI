@@ -201,11 +201,12 @@ export function SettingsPage(props:SettingsPageProps) {
        <Switch label="Reduced motion" hint="Turns off animation everywhere in STAR. Applied and saved immediately." checked={draft.reduced_motion} onChange={props.setReducedMotion}/>
      </Panel>
    </Block>
-   <Block id="answers" keywords="chat image picture web internet search fast instant speed">
+   <Block id="answers" keywords="chat image picture web internet search fast instant speed typing warm prefill">
      <Panel className="settings-section"><h3 className="settings-group-title">Answers</h3>
        <Switch label="Create images straight from chat" hint={'A message that clearly asks for a picture ("generate an image of ...", "create a logo for ...") is made with your image tools instead of going to the text model. Off: such messages go to the text model.'} checked={draft.media_chat_auto!==false} onChange={on=>set({media_chat_auto:on})}/>
        <Switch label="Search the web when a question needs it" hint="News, prices, weather and other “latest” questions use your web search. Your question is sent to the search provider. Off: STAR only searches when you ask." checked={draft.web_auto_search!==false} onChange={on=>set({web_auto_search:on})}/>
        <Switch label="Instant answers on this PC" hint="Fast and Auto: use a model already loaded on this PC for simple text. Otherwise use STAR Server. Never loads a model automatically." checked={draft.instant_route_enabled===true} onChange={on=>set({instant_route_enabled:on})}/>
+       <Switch label="Start thinking while I type" hint="STAR Server or this PC: after a short pause in typing, the model reads the chat and your draft, so the answer starts sooner when you press Enter. The answer is the same. Waits while the server is answering someone else." checked={draft.prefill_while_typing===true} onChange={on=>set({prefill_while_typing:on})}/>
      </Panel>
    </Block>
   </>,
