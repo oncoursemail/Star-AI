@@ -170,6 +170,18 @@ def test_the_cache_forgets_old_and_surplus_entries():
     assert cache.get("a") is None
 
 
+def test_the_cache_holds_no_more_than_its_memory_cap():
+    reply = {"passages": [{"text": "x" * 1000}]}
+    size = serve.ResultCache._size(reply)
+    cache = serve.ResultCache(entries=100, ttl=1e9, max_bytes=size * 3)
+    for key in "abcd":
+        cache.put(key, reply)
+    assert cache.get("a") is None and cache.get("d") == reply      # the oldest entry made room
+    assert cache.stats()["entries"] == 3 and cache.bytes == size * 3
+    cache.put("d", reply)                                           # replacing an entry does not count it twice
+    assert cache.bytes == size * 3
+
+
 def test_per_page_limits_how_many_passages_one_page_contributes(running):
     _, _, port, _ = running
     two = post(port, "/search", {"query": "tween remote events boundary parts", "mode": "bm25", "top": 5})[1]

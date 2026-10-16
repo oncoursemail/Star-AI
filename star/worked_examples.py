@@ -161,12 +161,26 @@ def terms(value: str) -> list[str]:
     return result
 
 
+# Terms of each example, kept in memory: tokenizing all 500 examples on every turn was ~96% of the
+# ~250 ms a retrieval took (docs/agents/instant-memory-presolve.md). Pure function of the text, so a cached
+# value is always right; at most _DOCUMENT_CACHE entries (a few MB), cleared when full. Callers only read it.
+_DOCUMENTS: dict[tuple[str, str], Counter[str]] = {}
+_DOCUMENT_CACHE = 4 * MAX_ROWS
+
+
 def _document(row: Example) -> Counter[str]:
+    key = (row.instruction, row.response)
+    found = _DOCUMENTS.get(key)
+    if found is not None:
+        return found
     # Original request dominates; the response contributes API names only.
     request = terms(row.instruction)
     api = [piece for match in list(_API.finditer(row.response))[:50]
            for piece in terms(match.group())]
-    return Counter(request * 3 + api)
+    if len(_DOCUMENTS) >= _DOCUMENT_CACHE:
+        _DOCUMENTS.clear()
+    found = _DOCUMENTS[key] = Counter(request * 3 + api)
+    return found
 
 
 def rank(prompt: str, examples: list[Example], *, limit: int = 2) -> list[tuple[Example, float]]:
