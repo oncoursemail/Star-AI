@@ -1,0 +1,22 @@
+Backport of upstream llama.cpp commit 23b0202a1 "server: leave a busy slot untouched when a request pins it" (#30295,
+in b11583). b11541 ran the prompt-cache update on a busy id_slot before deferring the request: a cached prompt
+was loaded into the slot while another request was generating there, and that answer went on with the wrong
+context (issue 118: STAR answers turning into unrelated text or stopping mid-script; a slot stuck in prompt
+processing). The busy slot is now returned untouched and the pinned request waits for it.
+---
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index 9a9c0c90d..44aaaddea 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -1686,6 +1686,11 @@ private:
+         if (task.id_slot != -1) {
+             ret = get_slot_by_id(task.id_slot);
+             if (ret) {
++                // a busy slot is returned untouched, the caller defers the task
++                if (ret->is_processing()) {
++                    return ret;
++                }
++
+                 SLT_INF(*ret, "selected slot by id (%d)\n", task.id_slot);
+             }
+         }

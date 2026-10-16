@@ -275,3 +275,60 @@ def test_a_request_that_could_not_be_built_does_not_turn_the_light_red(desk, mon
     desk.models.answer = ConnectionError("refused")
     assert warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen))["ok"] is False
     assert server_status(settings)["ok"] is False
+
+
+# ------------------------------------------------------------------ issue 118: another client's slot
+
+def busy_probe(busy, asked=None):
+    """A stand-in for providers.look_for_busy_slots: `busy` maps a model to the slots generating there."""
+    async def probe(settings, model, *, conversation=""):
+        if asked is not None:
+            asked.append((model, conversation))
+        return frozenset(busy.get(model, ()))
+    return probe
+
+
+def test_warm_up_never_pins_a_slot_another_client_is_generating_in(desk, monkeypatch):
+    # 2026-10-16 (issue 118): a warm-up pinned to a slot where another client was generating made the brain's
+    # llama.cpp (before b11583) load the warm-up's cached prompt into that busy slot; the other client's answer
+    # went on with the wrong context (a Roblox script turned into text about Script vs LocalScript).
+    monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
+    settings, seen, asked = lan_settings(), [], []
+    assert warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen),
+                   probe=busy_probe({}))["primed"] is True
+    first = desk.models.requests[0]
+    model, slot = first["model"], first["extra_body"]["id_slot"]
+    desk.models.requests.clear()
+
+    report = warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen),
+                     probe=busy_probe({model: {slot}}, asked))
+    assert report["skipped"] == "slot_busy" and report["primed"] is False and report["ok"] is True
+    assert desk.models.requests == []                                # nothing sent into the busy slot
+    assert asked and asked[0][0] == model and asked[0][1]            # asked about that model, as a named check
+
+    # Only the other slot busy: the warm-up goes to the chat's own slot as before.
+    report = warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen),
+                     probe=busy_probe({model: {1 - slot}}))
+    assert report["primed"] is True and desk.models.requests[0]["extra_body"]["id_slot"] == slot
+
+
+def test_a_busy_slot_of_the_second_model_skips_only_that_warm_up(desk, monkeypatch):
+    monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
+    settings, seen = lan_settings(), []
+    monkeypatch.setattr(warmup, "prefix_requests", lambda *a: [
+        {"model": "star-voice", "messages": [{"role": "user", "content": "."}], "tools": None,
+         "extras": {"cache_prompt": True, "id_slot": 0}},
+        {"model": "star-fast", "messages": [{"role": "user", "content": "."}], "tools": None,
+         "extras": {"cache_prompt": True, "id_slot": 1}}])
+    report = warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen),
+                     probe=busy_probe({"star-fast": {1}}))
+    assert report["primed"] is True and "also_primed" not in report
+    assert [request["model"] for request in desk.models.requests] == ["star-voice"]
+
+
+def test_a_failed_busy_check_never_stops_the_warm_up(desk, monkeypatch):
+    monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
+    async def broken(*_a, **_k):
+        raise RuntimeError("no answer")
+    report = warm_up(lan_settings(), home=desk.home, chat_id=desk.chat, transport=lan_transport([]), probe=broken)
+    assert report["primed"] is True
