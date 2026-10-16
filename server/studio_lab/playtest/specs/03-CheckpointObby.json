@@ -1,0 +1,30 @@
+{
+ "name": "CheckpointObby",
+ "kind": "obby",
+ "brief": "An obby with a checkpoint: start floor with SpawnLocation, 3 platforms, a checkpoint pad, 3 more platforms, then a finish pad. Touching the checkpoint makes the player respawn there after dying.",
+ "contract": [
+  "Create a SpawnLocation on the start floor inside script.Parent.",
+  "Name the 6 platforms Stage1 ... Stage6 in jump order; the checkpoint pad is a Part named Checkpoint between Stage3 and Stage4; the finish pad is Goal.",
+  "After a player touched Checkpoint, every respawn of that player must put the character on the Checkpoint (for example in CharacterAdded, move the character there)."
+ ],
+ "checks": [
+  {
+   "do": "reach",
+   "target": "Checkpoint",
+   "seconds": 40
+  },
+  {
+   "do": "respawn_near",
+   "target": "Checkpoint",
+   "within": 5
+  },
+  {
+   "do": "route",
+   "prefix": "Stage",
+   "target": "Goal",
+   "min": 6,
+   "seconds": 20
+  }
+ ],
+ "playSeconds": 150
+}

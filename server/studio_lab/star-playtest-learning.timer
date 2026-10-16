@@ -1,0 +1,10 @@
+[Unit]
+Description=Run STAR playtest learning at 05:15 UTC (after the Studio Lab nightly at 03:30)
+
+[Timer]
+OnCalendar=*-*-* 05:15:00 UTC
+RandomizedDelaySec=300
+Persistent=false
+
+[Install]
+WantedBy=timers.target

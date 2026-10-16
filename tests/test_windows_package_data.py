@@ -52,6 +52,7 @@ OTHER_FILE_ANCHORS = {
     "star/general_knowledge_benchmark.py": "source-only benchmark",
     "star/github_app.py": "source-root check blocks credential files",
     "star/media_actions.py": "owner-installed external ComfyUI",
+    "star/playtest_learning.py": "server-only playtest learning: robot + specs in server/studio_lab/playtest (brain 2)",
     "star/shared_brain/improve.py": "development verifier source hash",
 }
 PENDING_OWNER_REVIEW = frozenset({

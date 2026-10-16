@@ -1,0 +1,27 @@
+{
+ "name": "CoinField",
+ "kind": "coins",
+ "brief": "A coin-collecting game: a flat grass arena with a SpawnLocation and 6 gold coins spread over it. Each coin gives the player 1 coin point and disappears when touched.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "Each coin is a Part named Coin inside script.Parent, floating about 2 studs above the floor, with CanCollide = false.",
+  "Give every player a leaderstats Folder with an IntValue named Coins (start 0).",
+  "Touching a coin adds 1 to Coins once and removes the coin (Destroy it)."
+ ],
+ "checks": [
+  {
+   "do": "collect",
+   "name": "Coin",
+   "stat": "Coins",
+   "min": 6,
+   "each": 1,
+   "seconds": 15
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Coins",
+   "min": 6
+  }
+ ],
+ "playSeconds": 150
+}
