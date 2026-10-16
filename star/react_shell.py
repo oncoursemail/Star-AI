@@ -119,7 +119,7 @@ PERMITTED_SETTINGS = frozenset({
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
     'instant_route_enabled','web_auto_search',
     'knowledge_endpoint','luau_run_before_answer',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check','skill_pack_embeddings','roblox_docs_live_enabled', 'project_rules_enabled', 'luau_retry_ladder',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check','skill_pack_embeddings','roblox_docs_live_enabled', 'project_rules_enabled', 'luau_retry_ladder', 'presolve_enabled',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
     'best_of_n','best_of_n_max',
@@ -721,6 +721,8 @@ def launch():
                 gpu_helper.HELPER.configure(Settings.load(self.settings_file), app_data())
             except Exception:
                 pass
+            from . import presolve   # opt-in overnight pre-solving: until it is switched on it only reads the setting
+            presolve.start_nightly(self.settings_file, app_data())
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
 

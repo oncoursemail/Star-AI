@@ -20,8 +20,8 @@ Hardening:
     A connection has HEADER_DEADLINE seconds in total to deliver its request line and headers
     and BODY_DEADLINE more for the body (absolute deadlines, not per-read timeouts), so idle or
     trickling connections cannot hold the service;
-  * repeated searches are answered from a small in-memory cache that is keyed by the index
-    generation, so a refreshed index never serves old passages;
+  * repeated searches are answered from an in-memory cache that is keyed by the index
+    generation, so a refreshed index never serves old passages (size and age: STAR_KB_CACHE_*);
   * the access log has the route, status, duration and body size, never the query or the code
     (set STAR_KB_LOG_QUERIES=1 to add the first 80 characters of a query while debugging).
 """
@@ -62,8 +62,13 @@ MAX_CONNECTIONS = int(os.environ.get("STAR_KB_MAX_CONNECTIONS", "48"))   # socke
 MAX_PER_CLIENT = int(os.environ.get("STAR_KB_MAX_PER_CLIENT", "16"))     # ... of which one client address may hold
 HEADER_DEADLINE = 5.0           # seconds from accept until the request line and all headers have arrived
 BODY_DEADLINE = 10.0            # seconds from the end of the headers until the whole body has arrived
-CACHE_ENTRIES = 512             # search-result cache size
-CACHE_TTL = 900.0               # ... and the age (seconds) after which an entry is recomputed
+# Search-result cache. A reply depends only on the query and the index generation (part of the key), so
+# age is not a correctness limit. Measured on server 1 (docs/agents/instant-memory-presolve.md): a fresh
+# vector search is ~58 ms (50 of them the query embedding), a cached one ~2 ms, and 44% of real searches
+# repeated within the old 15 minutes; night school repeats its practice queries over hours.
+CACHE_ENTRIES = int(os.environ.get("STAR_KB_CACHE_ENTRIES", "8192"))     # search-result cache size
+CACHE_TTL = float(os.environ.get("STAR_KB_CACHE_TTL", "86400"))          # ... age (s) after which it is recomputed
+CACHE_MB = float(os.environ.get("STAR_KB_CACHE_MB", "256"))              # ... and a hard cap on its passage text
 VECTOR_RECHECK = 300.0          # how often the number of stored vectors is re-read (seconds); a rebuild is seen at once
 _BUSY = (b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 16\r\n"
          b"Retry-After: 1\r\nConnection: close\r\n\r\n" + b'{"error":"busy"}')
@@ -149,20 +154,29 @@ def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict
 
 
 class ResultCache:
-    """Small LRU for search replies. The key includes the index generation, so entries made on an
-    older index are never returned; they age out."""
+    """LRU for search replies. The key includes the index generation, so entries made on an
+    older index are never returned; they age out. `max_bytes` caps the memory the replies hold
+    (estimated from their passage text), whatever the entry count."""
 
-    def __init__(self, entries: int = CACHE_ENTRIES, ttl: float = CACHE_TTL, clock=time.monotonic):
-        self.entries, self.ttl, self.clock = entries, ttl, clock
+    def __init__(self, entries: int = CACHE_ENTRIES, ttl: float = CACHE_TTL, clock=time.monotonic,
+                 max_bytes: int = int(CACHE_MB * 1024 * 1024)):
+        self.entries, self.ttl, self.clock, self.max_bytes = entries, ttl, clock, max_bytes
         self._items: OrderedDict = OrderedDict()
         self._lock = threading.Lock()
         self.hits = self.misses = 0
+        self.bytes = 0
+
+    @staticmethod
+    def _size(value) -> int:
+        passages = value.get("passages", ()) if isinstance(value, dict) else ()
+        return 512 + sum(len(p.get("text", "")) * 2 + 256 for p in passages if isinstance(p, dict))
 
     def get(self, key):
         with self._lock:
             item = self._items.get(key)
             if item is None or self.clock() - item[0] > self.ttl:
-                self._items.pop(key, None)
+                if item is not None:
+                    self.bytes -= self._items.pop(key)[2]
                 self.misses += 1
                 return None
             self._items.move_to_end(key)
@@ -170,15 +184,20 @@ class ResultCache:
             return item[1]
 
     def put(self, key, value) -> None:
+        size = self._size(value)
         with self._lock:
-            self._items[key] = (self.clock(), value)
+            if key in self._items:
+                self.bytes -= self._items[key][2]
+            self._items[key] = (self.clock(), value, size)
             self._items.move_to_end(key)
-            while len(self._items) > self.entries:
-                self._items.popitem(last=False)
+            self.bytes += size
+            while self._items and (len(self._items) > self.entries or self.bytes > self.max_bytes):
+                self.bytes -= self._items.popitem(last=False)[1][2]
 
     def stats(self) -> dict:
         with self._lock:
             return {"entries": len(self._items), "max_entries": self.entries, "ttl_s": self.ttl,
+                    "mb": round(self.bytes / 1048576, 1), "max_mb": round(self.max_bytes / 1048576, 1),
                     "hits": self.hits, "misses": self.misses}
 
 
