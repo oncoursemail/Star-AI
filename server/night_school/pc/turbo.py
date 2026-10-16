@@ -60,6 +60,7 @@ GPU_LOOK_S = 15.0
 COOL_DOWN_S = 600.0
 LOAD_S = 330.0
 YIELD_WAIT_S = 4.0
+LOCK_STALE_S = 1200                       # night school's rule: an older quiet lock is stale
 SERVER_HOME = "/opt/star/learning"
 TASK_NAME = "STAR GPU night turbo"
 SYSTEM_GPU = {"dwm.exe", "csrss.exe", "system", "idle", "explorer.exe"}
@@ -140,7 +141,7 @@ def night_now(config: dict, hour: int) -> bool:
 # ---- the supervisor ------------------------------------------------------------------------------------------------
 class Turbo:
     def __init__(self, home: Path, config: dict, *, probe=None, helper=None, popen=subprocess.Popen, sync=None,
-                 merge=None, clock=time.monotonic, hour=lambda: time.localtime().tm_hour):
+                 merge=None, server_lock=None, clock=time.monotonic, hour=lambda: time.localtime().tm_hour):
         from star.gpu_helper import GpuHelper
         self.home, self.config = Path(home), config
         self.ns = self.home / "ns"
@@ -149,6 +150,7 @@ class Turbo:
         self._popen, self._clock, self._hour = popen, clock, hour
         self._sync = sync or (lambda: sync_from_server(self.config, self.ns))
         self._merge = merge or (lambda: merge_now(self.config, self.home))
+        self._server_lock = server_lock or (lambda: quiet_lock_held(self.config))
         self.state = "waiting"                # waiting -> loading -> running -> waiting
         self.reason = ""
         self.worker = None
@@ -224,7 +226,7 @@ class Turbo:
             return f"the owner is active (idle {int(idle // 60)} of {int(need // 60)} min{', night' if night else ''})"
         if self._clock() < self.next_look:
             return self.block_text
-        found = self._program_blocker() or self._gpu_blocker(force=True)
+        found = self._lock() or self._program_blocker() or self._gpu_blocker(force=True)
         if found:
             self.next_look, self.block_text = self._clock() + 60, found
         return found or ("checking the graphics card again" if self.gpu_hot else "")
@@ -242,8 +244,12 @@ class Turbo:
         if self.state == "loading" and state in ("failed", "busy", "off"):
             return "the model server did not start: " + self.helper.status()["text"][:160]
         if self._clock() - self.gpu_at >= GPU_LOOK_S:
-            return self._program_blocker() or self._gpu_blocker()
+            return self._lock() or self._program_blocker() or self._gpu_blocker()
         return ""
+
+    def _lock(self) -> str:
+        """Server 1's quiet lock (timing runs): the sessions use its knowledge service and sandbox, so they pause."""
+        return "server 1's quiet lock is held" if self._server_lock() else ""
 
     # -- one step ----------------------------------------------------------------------------------------------------
     def tick(self) -> None:
@@ -417,6 +423,18 @@ def _ssh(config: dict, command: str, timeout: float = 90) -> bytes:
     if done.returncode != 0:
         raise OSError(f"ssh failed (status {done.returncode})")
     return done.stdout
+
+
+def quiet_lock_held(config: dict) -> bool:
+    """/opt/star/lock exists in server 1's container and is fresh (older than LOCK_STALE_S = stale, as in night
+    school). Unreachable server: False (night school's own checks then fail and count as errors, not answers)."""
+    if not config["server_ssh"]:
+        return False
+    try:
+        out = _ssh(config, "sh -c 'echo $(( $(date +%s) - $(stat -c %Y /opt/star/lock 2>/dev/null || echo 0) ))'", 20)
+        return int(out.decode().strip() or "999999") < LOCK_STALE_S
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
 
 
 def _untar(data: bytes, into: Path) -> None:

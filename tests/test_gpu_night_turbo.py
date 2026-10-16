@@ -87,11 +87,12 @@ def rig(tmp_path, monkeypatch):
         synced.append(1)
         (tmp_path / "home" / "ns" / "pool").mkdir(parents=True, exist_ok=True)
         return "pool copied"
-    hour = {"now": 14}
+    hour, lock = {"now": 14}, {"held": False}
     (tmp_path / "home").mkdir()
     t = turbo.Turbo(tmp_path / "home", config, probe=Probe(), helper=Helper(), popen=popen, sync=sync,
-                    merge=lambda: merged.append(1) or "merged", clock=Clock(), hour=lambda: hour["now"])
-    t.spawned, t.synced, t.merged, t.killed, t.hour = spawned, synced, merged, killed, hour
+                    merge=lambda: merged.append(1) or "merged", server_lock=lambda: lock["held"], clock=Clock(),
+                    hour=lambda: hour["now"])
+    t.spawned, t.synced, t.merged, t.killed, t.hour, t.lock = spawned, synced, merged, killed, hour, lock
     return t
 
 
@@ -182,6 +183,7 @@ def test_a_session_runs_night_school_on_the_switch_launcher_and_stops_when_the_o
     (lambda r: r.probe.procs.update({301: "llama-server.exe"}), "another llama-server"),
     (lambda r: setattr(r.worker, "returncode", 3), "night school exited (code 3)"),
     (lambda r: setattr(r.helper, "state", "failed"), "model server is failed"),
+    (lambda r: r.lock.update(held=True), "quiet lock"),
 ])
 def test_a_running_session_stops_for_each_reason(rig, change, words):
     rig.tick()
@@ -277,3 +279,10 @@ def test_merged_outbox_keeps_both_workers_results_in_the_app_formats(tmp_path):
     bundle = build_bundle(tmp_path / "merged")                     # the app's own packaging accepts it
     assert len(bundle["examples"]) == 3
     assert sorted(l["id"] for l in bundle["lessons"]) == ["L1", "pc-gpu:L1"]      # both kept, no id clash
+
+
+def test_server_1s_quiet_lock_blocks_a_start(rig):
+    rig.lock["held"] = True
+    assert rig.start_blocker() == "server 1's quiet lock is held"
+    rig.lock["held"], rig.next_look = False, -1e18
+    assert rig.start_blocker() == ""
