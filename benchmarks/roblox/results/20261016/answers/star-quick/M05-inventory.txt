@@ -1,0 +1,77 @@
+```lua
+local Inventory = {}
+Inventory.__index = Inventory
+
+function Inventory.new(maxStack, slots)
+	local self = setmetatable({}, Inventory)
+	self.maxStack = maxStack
+	self.slots = {}
+	self.slotCount = slots
+	for i = 1, slots do
+		self.slots[i] = {item = "", count = 0}
+	end
+	return self
+end
+
+function Inventory:add(item, n)
+	local added = 0
+	-- first try to fill existing stacks of that item
+	for _, slot in ipairs(self.slots) do
+		if slot.item == item and slot.count < self.maxStack then
+			local canAdd = self.maxStack - slot.count
+			local take = math.min(canAdd, n)
+			slot.count = slot.count + take
+			added = added + take
+			n = n - take
+			if n == 0 then
+				return added
+			end
+		end
+	end
+	-- then fill empty slots
+	for _, slot in ipairs(self.slots) do
+		if slot.item == "" and n > 0 then
+			local take = math.min(self.maxStack, n)
+			slot.item = item
+			slot.count = take
+			added = added + take
+			n = n - take
+			if n == 0 then
+				return added
+			end
+		end
+	end
+	return added
+end
+
+function Inventory:remove(item, n)
+	local total = 0
+	for _, slot in ipairs(self.slots) do
+		if slot.item == item and slot.count > 0 then
+			local canRemove = slot.count
+			local take = math.min(canRemove, n - total)
+			slot.count = slot.count - take
+			total = total + take
+			if slot.count == 0 then
+				slot.item = ""
+			end
+			if total >= n then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function Inventory:count(item)
+	local total = 0
+	for _, slot in ipairs(self.slots) do
+		if slot.item == item then
+			total = total + slot.count
+		end
+	end
+	return total
+end
+
+return Inventory
+```

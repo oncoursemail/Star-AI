@@ -1,0 +1,77 @@
+```lua
+local RoundManager = {}
+RoundManager.__index = RoundManager
+
+local STATES = {
+	"Intermission",
+	"Playing",
+	"Ended"
+}
+
+function RoundManager.new(durations)
+	local self = setmetatable({}, RoundManager)
+	
+	self._durations = durations
+	self._state = "Intermission"
+	self._timeLeft = durations.Intermission
+	self._listeners = {}
+	
+	return self
+end
+
+function RoundManager:onChanged(fn)
+	table.insert(self._listeners, fn)
+end
+
+function RoundManager:_fireListeners(newState, oldState)
+	for _, fn in ipairs(self._listeners) do
+		fn(newState, oldState)
+	end
+end
+
+function RoundManager:step(dt)
+	if dt <= 0 then return end
+	
+	local currentTime = dt
+	local currentState = self._state
+	local currentLeft = self._timeLeft
+	
+	while currentTime > 0 do
+		if currentLeft > currentTime then
+			-- We stay in the current state
+			currentLeft = currentLeft - currentTime
+			currentTime = 0
+		else
+			-- We exhaust the current state
+			currentTime = currentTime - currentLeft
+			currentLeft = 0
+			
+			-- Determine next state
+			local nextState = nil
+			if currentState == "Intermission" then
+				nextState = "Playing"
+			elseif currentState == "Playing" then
+				nextState = "Ended"
+			elseif currentState == "Ended" then
+				nextState = "Intermission"
+			end
+			
+			-- Fire listener for the transition
+			self:_fireListeners(nextState, currentState)
+			
+			-- Update state variables
+			currentState = nextState
+			currentLeft = self._durations[nextState]
+		end
+	end
+	
+	self._state = currentState
+	self._timeLeft = currentLeft
+end
+
+function RoundManager:state()
+	return self._state
+end
+
+return RoundManager
+```

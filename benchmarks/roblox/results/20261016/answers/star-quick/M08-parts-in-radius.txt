@@ -1,0 +1,42 @@
+```lua
+local Module = {}
+
+function Module.partsInRadius(center, radius, exclude)
+	local parts = {}
+	local excludeSet = {}
+	if exclude then
+		for _, excl in ipairs(exclude) do
+			excludeSet[excl] = true
+			local descendants = excl:GetChildren()
+			for _, desc in ipairs(descendants) do
+				excludeSet[desc] = true
+			end
+		end
+	end
+
+	local params = Instance.new("OverlapParams")
+	params.FilterDescendantsInstances = {workspace}
+	params.IgnoreWater = true
+	local results = workspace:GetPartBoundsInRadius(radius, center, params)
+
+	for _, partInfo in ipairs(results) do
+		local part = partInfo.Part
+		if not excludeSet[part] then
+			local dist = (part.Position - center).Magnitude
+			table.insert(parts, {Part = part, Distance = dist})
+		end
+	end
+
+	table.sort(parts, function(a, b)
+		return a.Distance < b.Distance
+	end)
+
+	local output = {}
+	for _, entry in ipairs(parts) do
+		table.insert(output, entry.Part)
+	end
+	return output
+end
+
+return Module
+```

@@ -1,0 +1,64 @@
+```lua
+local PriorityQueue = {}
+PriorityQueue.__index = PriorityQueue
+
+function PriorityQueue.new(less)
+	local self = setmetatable({}, PriorityQueue)
+	self._heap = {}
+	if less then
+		self._less = less
+	else
+		self._less = function(a, b) return a < b end
+	end
+	return self
+end
+
+function PriorityQueue:push(value)
+	local heap = self._heap
+	table.insert(heap, value)
+	local i = #heap
+	while i > 1 do
+		local parent = math.floor(i / 2)
+		if not self._less(heap[parent], heap[i]) then break end
+		heap[parent], heap[i] = heap[i], heap[parent]
+		i = parent
+	end
+end
+
+function PriorityQueue:pop()
+	local heap = self._heap
+	local n = #heap
+	if n == 0 then return nil end
+	local result = heap[1]
+	heap[1] = heap[n]
+	table.remove(heap, n)
+	n = #heap
+	local i = 1
+	while true do
+		local left = i * 2
+		local right = left + 1
+		local smallest = i
+		if left <= n and self._less(heap[left], heap[smallest]) then
+			smallest = left
+		end
+		if right <= n and self._less(heap[right], heap[smallest]) then
+			smallest = right
+		end
+		if smallest == i then break end
+		heap[i], heap[smallest] = heap[smallest], heap[i]
+		i = smallest
+	end
+	return result
+end
+
+function PriorityQueue:peek()
+	local heap = self._heap
+	return heap[1]
+end
+
+function PriorityQueue:size()
+	return #self._heap
+end
+
+return PriorityQueue
+```

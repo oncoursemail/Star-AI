@@ -1,0 +1,64 @@
+```lua
+local Players = game:GetService("Players")
+
+-- Function to create leaderstats for a player
+local function setupLeaderstats(player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Value = 0
+	coins.Parent = leaderstats
+end
+
+-- Setup for existing players
+for _, player in ipairs(Players:GetPlayers()) do
+	setupLeaderstats(player)
+end
+
+-- Setup for new players
+Players.PlayerAdded:Connect(function(player)
+	setupLeaderstats(player)
+end)
+
+-- Create the coin folder and parts
+local coinFolder = Instance.new("Folder")
+coinFolder.Name = "Coins"
+coinFolder.Parent = script.Parent
+
+local coins = {}
+
+for i = 1, 5 do
+	local part = Instance.new("Part")
+	part.Name = "Coin"
+	part.CanCollide = false
+	part.Anchored = true
+	part.Position = Vector3.new(400 + 10 * i, 50, 400)
+	part.Parent = coinFolder
+	table.insert(coins, part)
+end
+
+-- Handle coin collection
+for _, coin in ipairs(coins) do
+	coin.Touched:Connect(function(hit)
+		local character = hit.Parent
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		
+		if humanoid then
+			local player = Players:GetPlayerFromCharacter(character)
+			if player then
+				local leaderstats = player:FindFirstChild("leaderstats")
+				if leaderstats then
+					local coinsValue = leaderstats:FindFirstChild("Coins")
+					if coinsValue then
+						coinsValue.Value = coinsValue.Value + 1
+						coin:Destroy()
+					end
+				end
+			end
+		end
+	end)
+end
+```

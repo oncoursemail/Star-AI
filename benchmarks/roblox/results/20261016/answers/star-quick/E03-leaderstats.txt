@@ -1,0 +1,31 @@
+```lua
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local function createLeaderstats(player)
+	local folder = Instance.new("Folder")
+	folder.Name = "leaderstats"
+	folder.Parent = player
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Value = 0
+	coins.Parent = folder
+
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Value = 0
+	wins.Parent = folder
+end
+
+local function onPlayerAdded(player)
+	createLeaderstats(player)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+-- Handle players who joined before the script started
+for _, player in ipairs(Players:GetPlayers()) do
+	onPlayerAdded(player)
+end
+```

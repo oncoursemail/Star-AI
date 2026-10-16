@@ -1,0 +1,43 @@
+```lua
+-- ModuleScript content
+local Shop = {}
+Shop.Meta = {__index = Shop}
+
+function Shop.new(prices)
+	local self = setmetatable({}, Shop.Meta)
+	self.Prices = prices
+	return self
+end
+
+function Shop:buy(player, itemId)
+	-- Validate itemId is a string
+	if type(itemId) ~= "string" then
+		return false, "Invalid item ID"
+	end
+
+	-- Check if player already owns the item
+	local ownKey = "Owns_" .. itemId
+	if player:GetAttribute(ownKey) == true then
+		return false, "Already owned"
+	end
+
+	-- Check if itemId exists in prices
+	local price = self.Prices[itemId]
+	if price == nil then
+		return false, "Item not found"
+	end
+
+	-- Check player coins
+	local coins = player:GetAttribute("Coins")
+	if coins < price then
+		return false, "Not enough coins"
+	end
+
+	-- Perform purchase
+	player:SetAttribute("Coins", coins - price)
+	player:SetAttribute(ownKey, true)
+	return true, "ok"
+end
+
+return Shop.new(...)
+```

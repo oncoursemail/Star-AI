@@ -1,0 +1,20 @@
+```lua
+local Module = {}
+
+function Module.groundBelow(position, ignore)
+	local ray = Ray.new(position, Vector3.new(0, -1, 0))
+	local maxDistance = 500
+	local result = workspace:Raycast(ray.Origin, ray.Direction * maxDistance, {
+		FilterDescendantsInstances = ignore or {},
+		FilterType = Enum.RaycastFilterType.Blacklist
+	})
+	if result and result.Instance then
+		local distance = (result.Position - position).Magnitude
+		return result.Instance, distance
+	else
+		return nil, nil
+	end
+end
+
+return Module
+```

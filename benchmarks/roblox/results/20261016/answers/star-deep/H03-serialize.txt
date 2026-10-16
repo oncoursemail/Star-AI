@@ -1,0 +1,71 @@
+```lua
+local M = {}
+
+local TAG = "__rbx__"
+
+local function encodeValue(value, depth)
+	if depth > 64 then
+		return nil
+	end
+
+	local t = typeof(value)
+
+	if t == "Vector3" then
+		return { [TAG] = "Vector3", x = value.X, y = value.Y, z = value.Z }
+	elseif t == "CFrame" then
+		local x, y, z = value:GetPosition():Unpack()
+		local rx, ry, rz = value:GetRotation():Unpack()
+		return { [TAG] = "CFrame", x = x, y = y, z = z, rx = rx, ry = ry, rz = rz }
+	elseif t == "Color3" then
+		local r, g, b = value:ToRGB()
+		return { [TAG] = "Color3", r = r, g = g, b = b }
+	elseif t == "number" or t == "string" or t == "boolean" then
+		return value
+	elseif t == "table" then
+		local out = {}
+		for k, v in pairs(value) do
+			local ek = k
+			if typeof(k) ~= "string" then
+				ek = tostring(k)
+			end
+			out[ek] = encodeValue(v, depth + 1)
+		end
+		return out
+	else
+		return nil
+	end
+end
+
+local function decodeValue(value)
+	if type(value) ~= "table" then
+		return value
+	end
+
+	local tag = value[TAG]
+	if tag == "Vector3" then
+		return Vector3.new(value.x, value.y, value.z)
+	elseif tag == "CFrame" then
+		local pos = Vector3.new(value.x, value.y, value.z)
+		local rot = CFrame.fromOrientation(value.rx, value.ry, value.rz)
+		return CFrame.new(pos) * rot
+	elseif tag == "Color3" then
+		return Color3.new(value.r / 255, value.g / 255, value.b / 255)
+	end
+
+	local out = {}
+	for k, v in pairs(value) do
+		out[k] = decodeValue(v)
+	end
+	return out
+end
+
+function M.encode(value)
+	return encodeValue(value, 0)
+end
+
+function M.decode(encoded)
+	return decodeValue(encoded)
+end
+
+return M
+```

@@ -1,0 +1,87 @@
+```lua
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local function giveCoins(player)
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not leaderstats then
+		leaderstats = Instance.new("Folder")
+		leaderstats.Name = "leaderstats"
+		leaderstats.Parent = player
+	end
+	local coins = leaderstats:FindFirstChild("Coins")
+	if not coins then
+		coins = Instance.new("IntValue")
+		coins.Name = "Coins"
+		coins.Value = 0
+		coins.Parent = leaderstats
+	end
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+	giveCoins(player)
+end
+
+Players.PlayerAdded:Connect(function(player)
+	giveCoins(player)
+end)
+
+local coinsFolder = Instance.new("Folder")
+coinsFolder.Name = "Coins"
+coinsFolder.Parent = script.Parent
+
+local function getCharacterPart(player)
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return character
+end
+
+local function getCharacterFromPart(part)
+	local character = part:FindFirstAncestorOfClass("Model")
+	if not character then
+		return nil
+	end
+	local player = Players:GetPlayerFromCharacter(character)
+	return player
+end
+
+local function handleCoinTouched(coin, part)
+	if not coin or not part then
+		return
+	end
+	local player = getCharacterFromPart(part)
+	if not player then
+		return
+	end
+	local character = getCharacterPart(player)
+	if not character then
+		return
+	end
+	if part:IsDescendantOf(character) then
+		local leaderstats = player:FindFirstChild("leaderstats")
+		local coins = leaderstats and leaderstats:FindFirstChild("Coins")
+		if coins and coins:IsA("IntValue") then
+			coins.Value = coins.Value + 1
+		end
+		coin:Destroy()
+	end
+end
+
+for i = 1, 5 do
+	local coin = Instance.new("Part")
+	coin.Name = "Coin"
+	coin.Anchored = true
+	coin.CanCollide = false
+	coin.Position = Vector3.new(400 + 10 * i, 50, 400)
+	coin.Parent = coinsFolder
+	coin.Touched:Connect(function(part)
+		handleCoinTouched(coin, part)
+	end)
+end
+```

@@ -1,0 +1,32 @@
+```lua
+local M = {}
+
+function M.pick(weights, rng)
+	local total = 0
+	for _, w in pairs(weights) do
+		total += w
+	end
+	if total <= 0 then
+		error("total weight must be greater than 0")
+	end
+	local r = rng:NextNumber() * total
+	local acc = 0
+	for k, w in pairs(weights) do
+		if w > 0 then
+			acc += w
+			if r < acc then
+				return k
+			end
+		end
+	end
+	-- fallback: return last key with positive weight
+	for k, w in pairs(weights) do
+		if w > 0 then
+			return k
+		end
+	end
+	error("no key selected")
+end
+
+return M
+```

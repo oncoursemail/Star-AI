@@ -1,0 +1,79 @@
+```lua
+local script = script
+local CoinsFolder = Instance.new("Folder")
+CoinsFolder.Name = "Coins"
+CoinsFolder.Parent = script.Parent
+
+for i = 1, 5 do
+	local part = Instance.new("Part")
+	part.Name = "Coin"
+	part.Size = Vector3.new(20, 20, 20)
+	part.Position = Vector3.new(400 + 10 * i, 50, 400)
+	part.CanCollide = false
+	part.Anchored = true
+	part.Parent = CoinsFolder
+end
+
+local function giveCoins(player, amount)
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not leaderstats then
+		leaderstats = Instance.new("Folder")
+		leaderstats.Name = "leaderstats"
+		leaderstats.Parent = player
+	end
+	local coins = leaderstats:FindFirstChild("Coins")
+	if not coins then
+		coins = Instance.new("IntValue")
+		coins.Name = "Coins"
+		coins.Value = 0
+		coins.Parent = leaderstats
+	end
+	coins.Value = coins.Value + amount
+end
+
+local function onCharacterAdded(character)
+	local player = game.Players:GetPlayerFromCharacter(character)
+	if player then
+		giveCoins(player, 0)
+	end
+end
+
+game.Players.PlayerAdded:Connect(function(player)
+	local character = player.Character or player.CharacterAdded:Wait()
+	onCharacterAdded(character)
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+	local character = player.Character
+	if character then
+		for _, part in ipairs(character:GetChildren()) do
+			if part:IsA("BasePart") then
+				part.Touched:Disconnect()
+			end
+		end
+	end
+end)
+
+local touchedCoins = {}
+
+for _, coin in ipairs(CoinsFolder:GetChildren()) do
+	if coin:IsA("Part") then
+		local function onTouched(part)
+			local player = game.Players:GetPlayerFromCharacter(part.Parent)
+			if player and not touchedCoins[coin] then
+				touchedCoins[coin] = true
+				giveCoins(player, 1)
+				coin:Destroy()
+			end
+		end
+		coin.Touched:Connect(onTouched)
+	end
+end
+
+for _, player in ipairs(game.Players:GetPlayers()) do
+	local character = player.Character
+	if character then
+		onCharacterAdded(character)
+	end
+end
+```

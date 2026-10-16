@@ -368,14 +368,17 @@ async def _task_row(bench: BenchRun, task: dict, model: str, answers: Path, out:
 async def run_bench(tasks: list[dict], models: list[str], answers: Path, open_guarded, out: Path, *, log=print,
                     bench_kwargs=None, sessions: int = 4, reopen_wait: float = 30.0) -> dict:
     """Every (model, task) once. A Studio failure (play did not start/stop, connector lost) closes the session and
-    reopens it (up to `sessions` times; the failed task is played again); what is left is reported as not run."""
+    reopens it, and the failed task is played again; after `sessions` sessions in a row without one finished task the
+    rest is reported as not run. (Brain 2, 2026-10-16: about one reopen per 8 playtests, always recovered.)"""
     out.mkdir(parents=True, exist_ok=True)
     kwargs = dict(bench_kwargs or {})
     sleep = kwargs.get("sleep", asyncio.sleep)
     rows: list[dict] = []
     pending = [(model, task) for model in models for task in tasks]
     cleanup: dict = {}
-    for attempt in range(sessions):
+    attempt = idle = 0
+    while idle < sessions:
+        before = len(pending)
         try:
             async with open_guarded() as (guarded, facts):
                 if guarded is None:
@@ -398,6 +401,8 @@ async def run_bench(tasks: list[dict], models: list[str], answers: Path, open_gu
             log(f"Studio session failed ({type(error).__name__})")
         if not pending:
             break
+        attempt += 1
+        idle = 0 if len(pending) < before else idle + 1
         await sleep(reopen_wait)
     rows += [{"model": m, "task": t["id"], "level": t["level"], "passed": False, "checks_passed": 0, "checks": 0,
               "why": ["not run: Studio problem"], "studio_problem": True} for m, t in pending]

@@ -1,0 +1,65 @@
+```lua
+local M = {}
+
+local function encodeValue(v)
+	local t = type(v)
+	if t == "number" or t == "boolean" or t == "string" then
+		return v
+	elseif t == "Vector3" then
+		return {__type = "Vector3", x = v.X, y = v.Y, z = v.Z}
+	elseif t == "CFrame" then
+		return {__type = "CFrame", p = {v.Position.X, v.Position.Y, v.Position.Z},
+		        q = {v.Orientation.X, v.Orientation.Y, v.Orientation.Z,
+		            v.Orientation.W, v.Right.X, v.Right.Y, v.Right.Z,
+		            v.Up.X, v.Up.Y, v.Up.Z, v.Down.X, v.Down.Y, v.Down.Z}}
+	elseif t == "Color3" then
+		return {__type = "Color3", r = v.R, g = v.G, b = v.B}
+	elseif t == "table" then
+		local res = {}
+		for k, v2 in pairs(v) do
+			res[k] = encodeValue(v2)
+		end
+		return res
+	else
+		error("Unsupported type: " .. t)
+	end
+end
+
+local function decodeValue(v)
+	if type(v) == "table" then
+		local t = v.__type
+		if t == "Vector3" then
+			return Vector3.new(v.x, v.y, v.z)
+		elseif t == "CFrame" then
+			local p = CFrame.new(v.p[1], v.p[2], v.p[3])
+			local q = v.q
+			local orientation = Quat.new(q[4], q[1], q[2], q[3])
+			local right = Vector3.new(q[5], q[6], q[7])
+			local up = Vector3.new(q[8], q[9], q[10])
+			local down = Vector3.new(q[11], q[12], q[13])
+			local cf = CFrame.new(p)
+			cf = cf * CFrame.new(right, up, down)
+			return cf
+		elseif t == "Color3" then
+			return Color3.new(v.r, v.g, v.b)
+		else
+			local res = {}
+			for k, v2 in pairs(v) do
+				res[k] = decodeValue(v2)
+			end
+			return res
+		end
+	end
+	return v
+end
+
+function M.encode(value)
+	return encodeValue(value)
+end
+
+function M.decode(encoded)
+	return decodeValue(encoded)
+end
+
+return M
+```

@@ -1,0 +1,34 @@
+```lua
+local function deepCopy(t)
+    if type(t) ~= "table" then
+        return t
+    end
+    local copy = {}
+    for k, v in pairs(t) do
+        copy[deepCopy(k)] = deepCopy(v)
+    end
+    setmetatable(copy, deepCopy(getmetatable(t)))
+    return copy
+end
+
+local function reconcile(data, template)
+    local result = deepCopy(data)
+    
+    local function merge(current, tmpl)
+        for k, v in pairs(tmpl) do
+            if current[k] == nil then
+                current[k] = deepCopy(v)
+            elseif type(current[k]) == "table" and type(v) == "table" then
+                merge(current[k], v)
+            end
+        end
+    end
+    
+    merge(result, template)
+    return result
+end
+
+return {
+    reconcile = reconcile
+}
+```

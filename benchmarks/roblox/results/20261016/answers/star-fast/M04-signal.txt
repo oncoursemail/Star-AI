@@ -1,0 +1,69 @@
+```lua
+local Signal = {}
+Signal.__index = Signal
+
+function Signal.new()
+	local self = setmetatable({
+		_connections = {},
+		_waiting = {}
+	}, Signal)
+	return self
+end
+
+function Signal:Connect(fn)
+	assert(type(fn) == "function", "Argument must be a function")
+	local connection = {}
+	connection.Disconnect = function()
+		for i, conn in ipairs(self._connections) do
+			if conn.fn == fn then
+				table.remove(self._connections, i)
+				return
+			end
+		end
+	end
+	table.insert(self._connections, { fn = fn })
+	return connection
+end
+
+function Signal:Once(fn)
+	assert(type(fn) == "function", "Argument must be a function")
+	local connection
+	connection = self:Connect(function(...)
+		connection:Disconnect()
+		fn(...)
+	end)
+	return connection
+end
+
+function Signal:Fire(...)
+	local args = { ... }
+	local numArgs = select("#", ...)
+
+	-- Fire connected functions
+	for _, conn in ipairs(self._connections) do
+		conn.fn(unpack(args, 1, numArgs))
+	end
+
+	-- Wake up waiters
+	for _, waiter in ipairs(self._waiting) do
+		waiter:Resume(args)
+	end
+	self._waiting = {}
+end
+
+function Signal:Wait()
+	local bindable = Instance.new("BindableEvent")
+	table.insert(self._waiting, bindable)
+	local success, result = pcall(function()
+		return bindable.Event:Wait()
+	end)
+	bindable:Destroy()
+	if success then
+		return unpack(result, 1, #result)
+	else
+		error(result)
+	end
+end
+
+return Signal
+```

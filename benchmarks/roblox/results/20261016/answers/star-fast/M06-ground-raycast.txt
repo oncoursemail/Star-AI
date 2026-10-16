@@ -1,0 +1,19 @@
+```lua
+local function groundBelow(position, ignore)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = ignore
+
+	local raycastResult = workspace:Raycast(position, Vector3.new(0, -500, 0), raycastParams)
+
+	if raycastResult then
+		return raycastResult.Instance, raycastResult.Distance
+	end
+
+	return nil, nil
+end
+
+return {
+	groundBelow = groundBelow
+}
+```
