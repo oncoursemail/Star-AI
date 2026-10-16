@@ -72,8 +72,24 @@ def digest(value) -> str:
     return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
 
 
+_LUA_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
 def _lua_string(text: str) -> str:
-    return json.dumps(text, ensure_ascii=True)
+    """A Luau string literal for any text, in ASCII. Not json.dumps: JSON's \\u2019 is a compile error in Luau (it
+    wants \\u{2019}); one curly quote in STAR's answer once broke the whole apply (live run 2026-10-16)."""
+    out = []
+    for char in text:
+        code = ord(char)
+        if char in _LUA_ESCAPES:
+            out.append(_LUA_ESCAPES[char])
+        elif code < 0x20 or code == 0x7F:
+            out.append(f"\\{code:03d}")
+        elif code > 0x7E:
+            out.append(f"\\u{{{code:x}}}")
+        else:
+            out.append(char)
+    return '"' + "".join(out) + '"'
 
 
 def switched_on() -> bool:

@@ -229,3 +229,9 @@ def test_brain_never_reports_url_or_key(tmp_path):
         raise OSError("http://brain.invalid:8080 refused")
     result = pl.Brain("http://brain.invalid:8080", key_file=str(key), opener=broken)([{"role": "user", "content": "x"}])
     assert result == {"ok": False, "text": "", "error": "OSError", "seconds": result["seconds"]}
+
+
+def test_luau_strings_escape_non_ascii_and_control_characters():
+    # JSON's ’ is a Luau compile error; a curly quote in STAR's answer broke a live apply.
+    assert pl._lua_string("it’s \\ \"x\"\n\t\x01") == r'"it\u{2019}s \\ \"x\"\n\t\001"'
+    assert pl._lua_string("\U0001F600").isascii()
