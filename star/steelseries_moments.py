@@ -56,13 +56,13 @@ def _post(endpoint: str, path: str, payload: dict) -> None:
                       headers={"Content-Type": "application/json"}, method="POST")
     # urllib's default redirect handler may redirect POSTs. Refuse redirection
     # so a compromised local service can't forward event data externally.
-    from urllib.request import build_opener, HTTPRedirectHandler
+    from urllib.request import build_opener, HTTPRedirectHandler, ProxyHandler
 
     class NoRedirect(HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             return None
 
-    with build_opener(NoRedirect).open(request, timeout=2.0) as response:
+    with build_opener(ProxyHandler({}), NoRedirect).open(request, timeout=2.0) as response:
         if not 200 <= response.status < 300:
             raise RuntimeError("SteelSeries GG did not accept the event request.")
         response.read(256)
