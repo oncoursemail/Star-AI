@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-_CATALOG_PATH = Path(__file__).with_name("candidate_catalog.json")
+_CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "business" / "candidate_catalog.json"  # under star/data: bundled by both Windows builds
 _WEIGHTS = (
     ("buyer_pain", 30),
     ("deliverability", 25),

@@ -164,7 +164,7 @@ description: Research viable businesses, evaluate product-market fit, price expe
 7. Prefer a single original high-quality service or developer tool with independent reproducible tests, then expand only from paid demand and customer feedback.
 8. For code/Roblox/UI products, require independent QA evidence, licenses, supported platform compatibility, accessible design and measured performance before offering a release.
 9. External publication, purchases, ad spend, mass messages, fulfillment promises, refunds, OAuth changes, or financial transfers require explicit scoped owner permission. A skill is never a permission grant.
-10. For Star's existing research, inspect docs/research/STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md and star/business/candidate_catalog.json when the authorized source workspace contains them. Treat all 66 opportunities and price tests as unvalidated hypotheses.
+10. For Star's existing research, inspect docs/research/STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md and star/data/business/candidate_catalog.json when the authorized source workspace contains them. Treat all 66 opportunities and price tests as unvalidated hypotheses.
 11. Define next action using available evidence: interview buyers, build a small prototype, fix defects, prepare a reviewable draft, or stop. Say clearly if no customers, real sales, or tests have been observed.
 Sources to recheck: https://create.roblox.com/docs/production/creator-store ; https://developers.etsy.com/documentation/tutorials/listings/ ; https://docs.stripe.com/webhooks ; https://www.ftc.gov/business-guidance/advertising-marketing
 """,

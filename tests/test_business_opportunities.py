@@ -35,7 +35,7 @@ def test_catalog_preserves_all_66_hypotheses():
 ])
 def test_catalog_rejects_invalid_envelope(tmp_path, mutation):
     data = json.loads((Path(__file__).parents[1] /
-                       "star/business/candidate_catalog.json").read_text(encoding="utf-8"))
+                       "star/data/business/candidate_catalog.json").read_text(encoding="utf-8"))
     data.update(mutation)
     target = tmp_path / "bad.json"
     target.write_text(json.dumps(data), encoding="utf-8")

@@ -2,7 +2,7 @@
 
 **Research reviewed:** 2026-10-15 (America/Chicago: 2026-10-14). **Implementation status:** opt-in, offline prototype in a draft branch; this document does not claim installed, released, live storefronts, paid customers, or profit.
 
-**Read first:** [66-opportunity research blueprint](STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md). Its pricing ranges are experiments, **not a market price survey, demand confirmation, or an income forecast**. The machine-readable hypotheses are in `star/business/candidate_catalog.json`.
+**Read first:** [66-opportunity research blueprint](STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md). Its pricing ranges are experiments, **not a market price survey, demand confirmation, or an income forecast**. The machine-readable hypotheses are in `star/data/business/candidate_catalog.json`.
 
 ## Executive conclusion
 
@@ -84,7 +84,7 @@ Build a deterministic preflight that estimates the *probability of a test failin
 
 ## 4. Current scoped implementation in this branch
 
-`star/business/candidate_catalog.json` — all 66 rows, preserved as hypotheses.
+`star/data/business/candidate_catalog.json` — all 66 rows, preserved as hypotheses.
 
 `star/business/opportunities.py` — pure, offline:
 - schema-checked hypothesis loading;

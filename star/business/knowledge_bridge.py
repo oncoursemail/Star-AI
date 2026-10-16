@@ -23,7 +23,7 @@ def seed_candidate_notes(root: Path, *, project: str = "STAR Business OS") -> in
     inserted = 0
     try:
         for idea in load_catalog():
-            source = f"repo:star/business/candidate_catalog.json#opportunity-{idea.id}"
+            source = f"repo:star/data/business/candidate_catalog.json#opportunity-{idea.id}"
             revision = "business-catalog-2026-10-14"
             exists = store.db.execute(
                 "SELECT 1 FROM notes WHERE project=? AND source=? AND revision=? LIMIT 1",
