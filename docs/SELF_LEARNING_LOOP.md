@@ -27,7 +27,10 @@ validation slice (W1)           checked worked examples              anything el
            [--scoreboard <night school report>]
 
    Every row is validated with the app's own importers. A worked example the importer refuses (for example an answer
-   longer than 4,000 characters) is skipped and counted, not silently dropped. The bundle records each lesson's
+   longer than 64,000 characters) is skipped and counted, not silently dropped. JSONL imports allow up to
+   1,048,576 characters per serialized row (including JSON escapes), within the existing 5 MiB file cap.
+   The per-turn retrieval budget remains 2,400 characters; an example that cannot fit intact is skipped.
+   The bundle records each lesson's
    paired-gate verdict exactly as night school wrote it in the evidence; a bundle whose verdict field disagrees with
    its evidence is refused.
 
