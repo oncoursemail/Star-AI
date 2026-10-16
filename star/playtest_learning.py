@@ -706,11 +706,11 @@ async def run_suite(specs: list[dict], open_guarded, brain, out: Path, *, log=pr
     takes Studio back to Edit mode on exit) and goes on with the next game, at most `reopen` times."""
     out.mkdir(parents=True, exist_ok=True)
     reports, started, queue = [], time.monotonic(), list(enumerate(specs, 1))
-    facts: dict = {}
-    sessions = 0
+    sessions, last_facts = 0, {}
     while queue and sessions <= reopen:
         sessions += 1
         async with open_guarded() as (guarded, facts):
+            last_facts = facts
             if guarded is None:
                 if not reports:
                     return {"ok": False, "problem": (facts or {}).get("problem") or "no verified STAR test place",
@@ -747,7 +747,7 @@ async def run_suite(specs: list[dict], open_guarded, brain, out: Path, *, log=pr
                     break
     summary = summarize(reports, time.monotonic() - started)
     summary["sessions"] = sessions
-    suite = {"ok": True, "started_utc": _now(), "summary": summary, "facts": facts, "games": [_row(r) for r in reports]}
+    suite = {"ok": True, "started_utc": _now(), "summary": summary, "facts": last_facts, "games": [_row(r) for r in reports]}
     (out / "suite.json").write_text(json.dumps(suite, indent=1, default=str), encoding="utf-8")
     suite["reports"] = reports
     return suite

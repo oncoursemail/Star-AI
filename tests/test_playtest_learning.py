@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import json
 import re
-from pathlib import Path
 
 import pytest
 
