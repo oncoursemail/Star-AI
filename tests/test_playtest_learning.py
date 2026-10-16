@@ -235,3 +235,18 @@ def test_luau_strings_escape_non_ascii_and_control_characters():
     # JSON's ’ is a Luau compile error; a curly quote in STAR's answer broke a live apply.
     assert pl._lua_string("it’s \\ \"x\"\n\t\x01") == r'"it\u{2019}s \\ \"x\"\n\t\001"'
     assert pl._lua_string("\U0001F600").isascii()
+
+
+def test_apply_retries_when_studio_cannot_say_which_place_is_open(tmp_path):
+    class Flaky(FakeStudio):
+        refusals = 1
+
+        async def call_tool(self, name, arguments):
+            if name == "execute_luau" and "STAR playtest apply" in arguments["code"] and self.refusals:
+                self.refusals -= 1
+                return {"isError": True, "content": [{"type": "text", "text": "Edit refused: STAR could not confirm "
+                                                      "which place is open right now, so nothing was changed"}]}
+            return await super().call_tool(name, arguments)
+    report = asyncio.run(pl.GameRun(Flaky(), FakeBrain([answer("print('ok')")]), tmp_path, log=lambda *_: None,
+                                    sleep=no_sleep, poll=0).run(spec()))
+    assert report["passed"] and not report.get("studio_problem")

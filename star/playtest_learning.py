@@ -450,7 +450,14 @@ class GameRun:
         return result_text(await self.guarded.call_tool("get_console_output", {"studio_id": self.guarded.studio_id}))
 
     async def apply(self, spec: dict, scripts: list[dict], run: str) -> dict:
-        ok, text = await self._luau(apply_luau(spec, scripts, run))
+        code = apply_luau(spec, scripts, run)
+        for attempt in range(3):
+            ok, text = await self._luau(code)
+            # Right after a playtest Studio sometimes cannot say which place is open; GuardedStudio then refuses
+            # only this change and sends nothing (live run 2026-10-16), so asking again a little later is safe.
+            if ok or "could not confirm which place is open" not in text or attempt == 2:
+                break
+            await self.sleep(5 * (attempt + 1))
         receipt = marked_json(text, APPLY_MARK) or {}
         return {"ok": ok and receipt.get("run") == run, "scripts": receipt.get("scripts"),
                 "detail": "" if ok else text[-300:]}
