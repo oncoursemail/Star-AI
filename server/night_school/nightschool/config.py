@@ -58,6 +58,12 @@ class Settings:
     share: str = field(default_factory=lambda: _env("STAR_NS_SHARE", ""))
     # The documentation and Luau-check service; "" = the brain's own host on the knowledge port (as before).
     knowledge_url: str = field(default_factory=lambda: _env("STAR_NS_KNOWLEDGE_URL", ""))
+    # Practice tasks another worker already answered (a JSON list of ids): left out of this worker's practice, so
+    # a share that moves from one worker to another is not answered twice. "" = none.
+    skip_file: str = field(default_factory=lambda: _env("STAR_NS_SKIP_FILE", ""))
+    # A worker outside the server (the PC's graphics card): run the unit tests in the server container's sandbox over
+    # SSH (star/eval_sandbox.ContainerSandbox, "user@address"), never on this machine. "" = the local Luau VM.
+    sandbox_ssh: str = field(default_factory=lambda: _env("STAR_NS_SANDBOX_SSH", ""))
 
     @property
     def app(self) -> Path:          # a copy of the repository (the folder that holds `star/`)
