@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 from typing import Mapping
 
@@ -125,7 +126,8 @@ def parse_work_report(raw: bytes) -> WorkSnapshot:
             raise ValueError("Invalid or duplicate work ID")
         seen.add(ident)
         kind, state = entry["kind"], entry["state"]
-        if kind not in _KINDS or state not in _STATES:
+        if (not isinstance(kind, str) or not isinstance(state, str)
+                or kind not in _KINDS or state not in _STATES):
             raise ValueError("Invalid work kind or state")
         done, total = _count(entry["done"]), _count(entry["total"])
         if done > total:
@@ -137,6 +139,52 @@ def parse_work_report(raw: bytes) -> WorkSnapshot:
                                 _plain(entry["task"]), _plain(entry["last_step"], optional=True),
                                 _plain(entry["next_step"], optional=True), done, total, work_time))
     return WorkSnapshot(timestamp, tuple(workers))
+
+
+def publish_work_report(path: Path, workers: list[dict], *, now: datetime | None = None) -> None:
+    """Host-side, single-writer adapter for trusted worker/supervisor events.
+
+    Intended for a separate STAR worker supervisor, never user/model/Discord input.
+    Never reads project files or introspects processes. The adapter writes one
+    atomically replaced snapshot; producers MUST renew heartbeats and stop reporting
+    'working' when the process actually exits. Multiple writers need an aggregator.
+    """
+    target = Path(path)
+    if not target.is_absolute() or target.suffix.lower() != ".json":
+        raise ValueError("Work output needs an absolute .json path")
+    if target.is_symlink() or target.parent.is_symlink():
+        raise ValueError("Work output path is not trusted")
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("Producer clock must be timezone-aware")
+    timestamp = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Copy rows so the caller cannot mutate a producer-provided record mid-write.
+    rows = []
+    if not isinstance(workers, list) or len(workers) > MAX_WORKERS:
+        raise ValueError("Worker report requires a bounded list")
+    for entry in workers:
+        if not isinstance(entry, dict):
+            raise ValueError("Producer record must be an object")
+        row = dict(entry)
+        row.setdefault("updated_at", timestamp)
+        rows.append(row)
+    payload = json.dumps({"version": 1, "updated_at": timestamp, "workers": rows},
+                         ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    parse_work_report(payload)  # same fail-closed guard as the Discord reader
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + "." + secrets.token_hex(6) + ".tmp")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def read_work_report(settings: WorkSettings) -> WorkSnapshot:
