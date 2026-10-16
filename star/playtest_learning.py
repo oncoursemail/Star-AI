@@ -469,6 +469,7 @@ class GameRun:
     async def playtest(self, spec: dict, run: str, folder: Path) -> dict:
         from .studio_loop import result_failed, result_text
         console, robot = "", parse_robot("", run)
+        asked = time.monotonic()
         for attempt in range(3):        # same transient as in apply(): refused before anything was sent
             started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
                                                                        "is_start": True})
@@ -479,13 +480,15 @@ class GameRun:
             return {"started": False, "stopped": True, "detail": result_text(started)[:300], "robot": robot,
                     "errors": {"game": [], "robot": [], "other": []}, "seconds": 0.0}
         began = time.monotonic()
-        stopped = None
+        start_s, robot_s, stopped = round(began - asked, 1), None, None
         try:
             deadline = began + spec["playSeconds"]
             while time.monotonic() < deadline:
                 await self.sleep(self.poll)
                 console = await self._console()
                 robot = parse_robot(console, run)
+                if robot["started"] and robot_s is None:
+                    robot_s = round(time.monotonic() - asked, 1)
                 if robot["finished"] or (not robot["started"] and time.monotonic() - began > self.settle + 30):
                     break
             await self.sleep(min(self.poll, 1.0))            # late error lines after the robot's last check
@@ -494,12 +497,17 @@ class GameRun:
         finally:
             stopped = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
                                                                        "is_start": False})
+        # Play start timing as data: slow starts (CPU shared with the night-school worker?) show up in the reports.
+        self.log(f"play start: Studio confirmed in {start_s}s, robot up after {robot_s if robot_s is not None else 'never'}s")
+        guard = getattr(self.guarded, "play_guard", None)
+        edit = await guard.ensure_edit() if guard is not None else None      # stop said ok, is Studio really in Edit?
         errors = output_errors(console, run, spec["name"])
         at = console.find(MARK)
         (folder / "playtest-output.txt").write_text(console[console.rfind("\n", 0, at) + 1:] if at >= 0 else console[-4000:],
                                                     encoding="utf-8")
-        return {"started": True, "stopped": not result_failed(stopped), "robot": robot, "errors": errors,
-                "seconds": round(time.monotonic() - began, 1)}
+        return {"started": True, "stopped": not result_failed(stopped) and (edit is None or edit["edit"] is not False),
+                "robot": robot, "errors": errors, "seconds": round(time.monotonic() - began, 1),
+                "start_s": start_s, "robot_start_s": robot_s, "edit": edit}
 
     def _ask(self, messages: list[dict], folder: Path, label: str) -> dict:
         answer = self.brain(messages)
@@ -551,7 +559,8 @@ class GameRun:
                     report["studio_problem"] = True     # GuardedStudio refuses later edits until a person looks
                     break
                 play = await self.playtest(spec, token, folder)
-                step["playtest"] = {k: play.get(k) for k in ("started", "stopped", "seconds", "errors", "detail")}
+                step["playtest"] = {k: play.get(k) for k in ("started", "stopped", "seconds", "errors", "detail", "start_s",
+                                                              "robot_start_s", "edit")}
                 step["robot"] = play["robot"]
                 step["report"] = judge(play["robot"], play["errors"], [])
                 if not play["stopped"] or not play["started"]:
@@ -761,7 +770,8 @@ def _row(report: dict) -> dict:
                                "failures": [f["code"] for f in it.get("report", {}).get("failures", [])],
                                "checks": f"{it.get('report', {}).get('checks_passed', 0)}/{it.get('report', {}).get('checks', 0)}",
                                "brain_s": (it.get("brain") or {}).get("seconds"),
-                               "play_s": (it.get("playtest") or {}).get("seconds")} for it in its],
+                               "play_s": (it.get("playtest") or {}).get("seconds"),
+                               "start_s": (it.get("playtest") or {}).get("start_s")} for it in its],
             "lesson": (report.get("lesson") or {}).get("text"), "problem": report.get("problem", "")}
 
 
@@ -802,13 +812,13 @@ def studio_opener(home: Path):
 async def leave_edit_mode(session, studio_id: str, facts: dict) -> None:
     """A playtest start that Studio reached only after the guard's deadline leaves STAR Test Place in Play, and every
     later session (the Studio Lab nightly too) then sees no Edit place (live run 2026-10-16). At the end of a run,
-    stop such a playtest on the same verified instance; it changes nothing in the place."""
-    from .studio_loop import result_text
+    stop such a playtest on the same verified instance (Stop on the display if the connector's stop does not take);
+    it changes nothing in the place."""
+    from .studio_play_fallback import play_guard
     try:
-        state = result_text(await session.call_tool("get_studio_state", arguments={"studio_id": studio_id}))
-        if "Mode: Play" in state:
-            await session.call_tool("start_stop_play", arguments={"studio_id": studio_id, "is_start": False})
-            facts["left_play_mode"] = True
+        ready = await play_guard(session, studio_id).ensure_edit(send_stop=True)
+        if ready["method"] != "edit":
+            facts["left_play_mode"] = ready
     except Exception as error:
         facts["left_play_mode"] = f"failed ({type(error).__name__})"
 

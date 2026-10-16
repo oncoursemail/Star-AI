@@ -1617,8 +1617,10 @@ class Lab:
     async def playtest(self, run: str, seconds: float, folder: Path) -> dict:
         console, probe, capture = "", parse_probe("", run), {"ok": False, "detail": "not taken"}
         async with self.play_lock:
+            asked = time.monotonic()
             started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
                                                                        "is_start": True})
+            start_s, probe_s = round(time.monotonic() - asked, 1), None
             if _failed(started):
                 return {"ok": False, "started": False, "detail": _text(started)[:300], "probe": probe, "errors": []}
             settle_until = time.monotonic() + self.settle
@@ -1627,6 +1629,8 @@ class Lab:
                     await self.sleep(min(self.poll, 1.0))
                     console = _text(await self._read("get_console_output"))
                     probe = parse_probe(console, run)
+                    if probe["started"] and probe_s is None:
+                        probe_s = round(time.monotonic() - asked, 1)
             except BaseException:
                 # Never leave Studio in Play (GuardedStudio would refuse every later edit): stop while still
                 # holding the lock, then let the error go on.
@@ -1648,10 +1652,16 @@ class Lab:
             async with self.play_lock:
                 stopped = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
                                                                            "is_start": False})
+                # The stop may answer "Game Stopped" while Studio stays in Play (live 2026-10-16): verify, else press Stop.
+                guard = getattr(self.guarded, "play_guard", None)
+                edit = await guard.ensure_edit() if guard is not None else None
+        self.log(f"play start: Studio confirmed in {start_s}s, probe up after {probe_s if probe_s is not None else 'never'}s")
         at = console.find(PROBE_MARK)
         (folder / "playtest-output.txt").write_text(console[console.rfind("\n", 0, at) + 1:] if at >= 0 else console[-4000:],
                                                     encoding="utf-8")
-        return {"ok": probe["ok"], "started": True, "stopped": not _failed(stopped),
+        return {"ok": probe["ok"], "started": True,
+                "stopped": not _failed(stopped) and (edit is None or edit["edit"] is not False),
+                "start_s": start_s, "probe_start_s": probe_s, "edit": edit,
                 "stop_detail": "" if not _failed(stopped) else _text(stopped)[:200],
                 "probe": probe, "errors": console_errors(console, run), "display_capture": capture}
 

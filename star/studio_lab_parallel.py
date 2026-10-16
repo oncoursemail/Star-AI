@@ -106,7 +106,14 @@ def farm_admits(studio_id: str, identity, verified: bool, scenario: str) -> tupl
 
 async def open_instance(session, discovered: list[dict], studio_id: str, *, home, own_account_id=None):
     """(GuardedStudio or None, facts) for exactly one Studio instance of a multi-Studio connector."""
-    from . import studio_loop, studio_remote
+    from . import studio_loop, studio_play_fallback, studio_remote
+    # A playtest stop that did not stick leaves Studio in Play, where no Edit place can be found (live 2026-10-16):
+    # send Stop, press it on the display if needed; if Studio stays in Play this run is skipped, not hung.
+    guard = studio_play_fallback.play_guard(session, studio_id)
+    ready = await guard.ensure_edit(send_stop=True)
+    if ready["edit"] is False:
+        return None, {"studio_id": studio_id, "verified": False, "play_guard": ready,
+                      "problem": "Studio is stuck in Play mode (Stop did not take): skipped"}
     pinned = studio_remote.PinnedSession(session)
     if own_account_id is None:
         own_account_id = studio_loop.own_account_id(home)
@@ -123,6 +130,7 @@ async def open_instance(session, discovered: list[dict], studio_id: str, *, home
     facts = {"studio_id": studio_id, "place": {"universe_id": place[0], "place_id": place[1]} if place else None,
              "pin": bool(answered), "editable": bool(guarded.verdict.editable), "verified": verified,
              "farm": reason, "verdict": guarded.verdict.public()}
+    setattr(guarded, "play_guard", guard)      # read back with getattr by the playtests
     return (guarded if admitted else None), facts
 
 
@@ -198,7 +206,7 @@ class Worker:
                 self.say(f"identity: {self.facts.get('place')} verified={self.facts.get('verified')} "
                          f"farm={self.facts.get('farm')}")
                 if guarded is None:
-                    self.say("refused: not a verified STAR test place; this worker runs nothing")
+                    self.say(self.facts.get("problem") or "refused: not a verified STAR test place; this worker runs nothing")
                     return self.rows
                 if self.clean_names:
                     # Drafts a stopped earlier run left in this slot would overlap the next build: remove them
