@@ -66,6 +66,32 @@ def test_the_registry_is_only_opened_for_reading():
         assert writer not in source
 
 
+@pytest.mark.parametrize('unattended', [False, True])
+@pytest.mark.parametrize('scope, switch', [
+    ('per-user', '/CURRENTUSER'), ('all-users', '/ALLUSERS'), ('unknown', None),
+])
+def test_installer_launch_preserves_the_running_copys_scope(monkeypatch, tmp_path, scope, switch, unattended):
+    candidate = updates.InstallerCandidate(tmp_path / 'STAR-Setup-v9.9.9.exe', '9.9.9', True, 'a' * 64)
+    monkeypatch.setattr(updates.sys, 'platform', 'win32')
+    monkeypatch.setattr(updates, 'select_downloaded_installer', lambda path: candidate)
+    monkeypatch.setattr(updates, '_sha256', lambda path: 'a' * 64)
+    monkeypatch.setattr(updates, 'install_scope', lambda: scope)
+    calls = []
+    monkeypatch.setattr(updates.subprocess, 'Popen', lambda args, **kwargs: calls.append((args, kwargs)))
+    updates.launch_installer(candidate, unattended=unattended)
+    args, kwargs = calls[0]
+    assert [arg for arg in args if arg in ('/CURRENTUSER', '/ALLUSERS')] == ([switch] if switch else [])
+    assert ('/SILENT' in args) is unattended
+    assert kwargs['shell'] is False
+
+
+def test_duplicate_registrations_use_the_running_per_user_copy(tmp_path):
+    app = tmp_path / 'Programs' / 'STAR'
+    # The same-folder stale HKLM entry seen after a per-user migration must not
+    # override the current user's matching registration.
+    assert updates.install_scope(app, reader({'HKCU': str(app), 'HKLM': str(app)})) == 'per-user'
+
+
 @pytest.mark.parametrize("scope, warned", [("all-users", True), ("per-user", False), ("unknown", False)])
 def test_the_update_progress_names_the_administrator_prompt(monkeypatch, tmp_path, scope, warned):
     candidate = SimpleNamespace(path=tmp_path / "STAR-Setup-v9.9.9.exe", version="9.9.9",
