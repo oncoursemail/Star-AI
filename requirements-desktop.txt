@@ -4,3 +4,5 @@ faster-whisper>=1.2.1,<2
 pyttsx3>=2.99,<3
 
 keyring>=25.6,<27
+# Local OBS WebSocket v5 control for opt-in replay buffer. OBS itself is separate.
+obsws-python>=1.7,<2
