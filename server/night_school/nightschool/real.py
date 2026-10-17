@@ -401,6 +401,28 @@ class RealModel:
         return parse_diagnosis(reply)
 
 
+    def complete(self, model: str, system: str, user: str, *, max_tokens: int = 1600, temperature: float = 0.4) -> str:
+        """One plain chat reply from `model` (the night conductor's calls). Same politeness as `diagnose`: waits for the
+        idle gate, is pinned to night school's slot (SlotRefused for a model that only has slot 0) and is cancelled
+        (Yielded) the moment another client shows up."""
+        from star import providers
+        self._ready()
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+        async def ask(cancel):
+            async with providers.open_client(self.app_settings) as client:
+                job = asyncio.ensure_future(client.chat.completions.create(
+                    model=model, messages=messages, max_tokens=max_tokens, temperature=temperature,
+                    extra_body={"cache_prompt": False, "chat_template_kwargs": {"enable_thinking": False}}))
+                while not job.done():
+                    if cancel.is_set():
+                        job.cancel()
+                        raise Yielded("another client")
+                    await asyncio.wait({job}, timeout=1.0)
+                return job.result().choices[0].message.content or ""
+        return self._watched(lambda cancel: asyncio.run(ask(cancel)))
+
+
 def parse_diagnosis(reply: str) -> dict:
     """{cause, lesson} from the model's reply; {} when it is not usable."""
     found = re.search(r"\{.*\}", reply or "", re.S)
