@@ -218,12 +218,12 @@ def parse_reply(reply: str) -> tuple[str, list[dict]]:
                 value = match.group(2).strip()
                 if key in ("require", "forbid"):
                     parts = [p.strip().strip("`").strip() for p in value.split(":::")]
-                    if key == "forbid" and re.fullmatch(r"\(?(none|n/a|-|no[a-z ]*)\)?\.?", value.strip("` ").lower() or "none"):
-                        continue                                  # "forbid: none" is a way of writing no line
+                    if len(parts) == 2 and all(parts):
+                        parts.append("required by the task")
                     if len(parts) == 3 and all(parts):
                         raw[key].append({"id": _check_id(parts[0], len(raw[key])), "re": parts[1], "why": parts[2]})
-                    else:
-                        raw["error"] = f"bad {key} line"
+                    elif key == "require":
+                        raw["error"] = "bad require line"           # a forbid line is optional: a bad one is ignored
                 elif key != "reference":
                     raw[key] = value
             elif key == "prompt" and line.strip():
@@ -344,7 +344,7 @@ class Validators:
         fenced = "```lua\n" + reference + "\n```"
         score = checks.score_answer(task, fenced, luau_check=self.luau_check, sandbox=None, prelude=self.prelude)
         if not score.passed:
-            return "reference fails its own task: " + (score.reasons or ["?"])[0][:70]
+            return "reference fails its own task: " + (score.reasons or ["?"])[0][:150]
         trivial = checks.score_answer(task, "```lua\nprint('hello')\n```", luau_check=self.luau_check, sandbox=None,
                                       prelude=self.prelude)
         if trivial.passed:
@@ -373,8 +373,9 @@ class Tally:
         key = re.sub(r"\s+", " ", reason)[:80]
         self.rejected[key] = self.rejected.get(key, 0) + 1
         if raw is not None:
-            self.samples.append({"reason": key, "category": str(raw.get("category", ""))[:40],
-                                 "prompt": scrub(str(raw.get("prompt", ""))[:200]), "error": str(raw.get("error", ""))})
+            self.samples.append({"reason": re.sub(r"\s+", " ", reason)[:200], "category": str(raw.get("category", ""))[:40],
+                                 "prompt": scrub(str(raw.get("prompt", ""))[:200]), "error": str(raw.get("error", "")),
+                                 "require": [str(c.get("re", ""))[:80] for c in (raw.get("require") or [])[:6]]})
 
 
 def _state_path(settings) -> Path:
