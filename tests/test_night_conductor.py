@@ -305,3 +305,25 @@ def test_recent_docs_skips_old_and_paintball_notes(tmp_path):
     old.write_text("# Old", encoding="utf-8")
     os.utime(old, (time.time() - 5 * 86400,) * 2)
     assert [name for name, _ in conductor.recent_docs(folder)] == ["new.md"]
+
+
+def test_parser_is_lenient_about_backticks_ids_none_forbid_and_missing_goal():
+    reply = ("=== TASK ===\ncategory: remote-security\ndifficulty: 2\nstrict: no\nprompt: In my Roblox game: write a ModuleScript Guard with "
+             "check(itemId: string, price: number): boolean that returns true only for a non-empty string and a positive price.\n"
+             "require: `return true` ::: `return\s+true` ::: returns true on success\n"
+             "require: `string check` ::: `type\(itemId\)` ::: checks the id type\n"
+             "forbid: none\nreference:\n```lua\nlocal Guard = {}\nfunction Guard.check(itemId: string, price: number): boolean\n"
+             "\tif type(itemId) ~= \"string\" or itemId == \"\" then return false end\n\treturn price > 0\nend\nreturn Guard\n```\n")
+    _, raws = conductor.parse_reply(reply)
+    assert raws[0]["forbid"] == [] and "error" not in raws[0]
+    assert [c["id"] for c in raws[0]["require"]] == ["return_true", "string_check"] and raws[0]["require"][0]["re"] == r"return\s+true"
+    task, why = conductor.build_task(raws[0], "20261017")
+    assert task and why == "" and task["goal"].startswith("write a ModuleScript Guard")
+
+
+def test_rejected_samples_are_kept_for_tuning(tmp_path):
+    s = settings_for(tmp_path)
+    conductor.run_cycle(s, lambda m, a, b: "DIAGNOSIS: none\n" + block(1, prompt="short"), validators(s), now=NIGHT, models=["m"],
+                        log=lambda *_: None)
+    lines = (s.conductor_dir / "rejected-20261017.jsonl").read_text(encoding="utf-8").splitlines()
+    assert lines and json.loads(lines[0])["reason"] == "format: prompt or goal length"

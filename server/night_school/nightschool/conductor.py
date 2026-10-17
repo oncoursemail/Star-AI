@@ -186,6 +186,11 @@ def ideas_prompt(docs: list[tuple[str, str]], categories: list[str], count: int)
             + FORMAT)
 
 
+def _check_id(text: str, index: int) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:30]
+    return cleaned or f"check{index + 1}"
+
+
 def parse_reply(reply: str) -> tuple[str, list[dict]]:
     """(diagnosis, [raw task dict]) from the model's text. Unusable blocks are returned with an "error" key."""
     text = (reply or "").replace("\r\n", "\n")
@@ -212,9 +217,11 @@ def parse_reply(reply: str) -> tuple[str, list[dict]]:
                 key = match.group(1).lower()
                 value = match.group(2).strip()
                 if key in ("require", "forbid"):
-                    parts = [p.strip() for p in value.split(" ::: ")]
+                    parts = [p.strip().strip("`").strip() for p in value.split(":::")]
+                    if key == "forbid" and re.fullmatch(r"\(?(none|n/a|-|no[a-z ]*)\)?\.?", value.strip("` ").lower() or "none"):
+                        continue                                  # "forbid: none" is a way of writing no line
                     if len(parts) == 3 and all(parts):
-                        raw[key].append({"id": parts[0], "re": parts[1], "why": parts[2]})
+                        raw[key].append({"id": _check_id(parts[0], len(raw[key])), "re": parts[1], "why": parts[2]})
                     else:
                         raw["error"] = f"bad {key} line"
                 elif key != "reference":
@@ -239,6 +246,8 @@ def build_task(raw: dict, night: str) -> tuple[dict | None, str]:
     """The pool task for a parsed block, or (None, short reason). Pure schema work, nothing is run here."""
     if raw.get("error"):
         return None, "format: " + raw["error"]
+    if not str(raw.get("goal", "")).strip() and str(raw.get("prompt", "")).strip():
+        raw["goal"] = re.sub(r"^In my Roblox game:\s*", "", raw["prompt"].strip())[:100]
     for key in ("category", "goal", "prompt", "reference"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             return None, f"format: {key} missing"
@@ -261,8 +270,6 @@ def build_task(raw: dict, night: str) -> tuple[dict | None, str]:
     if not (2 <= len(require) <= 6) or len(forbid) > 3:
         return None, "format: need 2-6 require and at most 3 forbid"
     for item in require + forbid:
-        if not (SLUG.match(item["id"].lower().replace("_", "-")) or re.fullmatch(r"[A-Za-z0-9_-]{1,30}", item["id"])):
-            return None, "format: bad check id"
         if len(item["re"]) > 200 or len(item["why"]) > 140:
             return None, "format: check too long"
         try:
@@ -360,10 +367,14 @@ class Tally:
     calls: int = 0
     diagnoses: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    samples: list = field(default_factory=list)       # a few rejected blocks, for tuning the prompt (rejected-YYYYMMDD.jsonl)
 
-    def reject(self, reason: str) -> None:
+    def reject(self, reason: str, raw: dict | None = None) -> None:
         key = re.sub(r"\s+", " ", reason)[:80]
         self.rejected[key] = self.rejected.get(key, 0) + 1
+        if raw is not None:
+            self.samples.append({"reason": key, "category": str(raw.get("category", ""))[:40],
+                                 "prompt": scrub(str(raw.get("prompt", ""))[:200]), "error": str(raw.get("error", ""))})
 
 
 def _state_path(settings) -> Path:
@@ -494,7 +505,7 @@ def run_cycle(settings, ask, validators: Validators, *, now: dt.datetime | None 
                 continue
             task, why = build_task(raw, night)
             if task is None:
-                tally.reject(why)
+                tally.reject(why, raw)
                 continue
             try:
                 why = validators.check(task, raw["reference"].strip("\n"))
@@ -502,7 +513,7 @@ def run_cycle(settings, ask, validators: Validators, *, now: dt.datetime | None 
                 tally.notes.append("a check could not run (" + str(exc)[:60] + "); cycle stopped")
                 return _finish(settings, state, tally, failures, night, used_model, log, stop=True)
             if why:
-                tally.reject(why)
+                tally.reject(why, raw)
                 continue
             validators.remember(task)
             night_tasks.append(task)
@@ -519,6 +530,14 @@ def _keep_reference(settings, night: str, task: dict, reference: str) -> None:
 
 
 def _finish(settings, state: dict, tally: Tally, failures: list[dict], night: str, model: str, log, stop: bool = False) -> dict:
+    if tally.samples:
+        try:
+            settings.conductor_dir.mkdir(parents=True, exist_ok=True)
+            with (settings.conductor_dir / f"rejected-{night}.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+                for sample in tally.samples[:60]:
+                    handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
     state["cycles"] = int(state.get("cycles", 0)) + 1
     state["accepted"] = int(state.get("accepted", 0)) + tally.accepted
     state["created"] = int(state.get("created", 0)) + tally.created
