@@ -49,7 +49,19 @@ Branch `star/night-conductor-20261017` -> `star/next`. Code: `server/night_schoo
   reference that must pass and a trivial answer that must fail.
 - `docs-recent` is a snapshot made at deploy time; after 2 days without a redeploy the ideas calls use categories only.
 
-## Real run
-(see the status log below)
+## Real run (server 1, 2026-10-17, window forced open with STAR_NS_CONDUCTOR_WINDOW=00:00-23:59; real time was 10:30 local)
+- Run 1: created 19, accepted 0 (parser too strict: backticks around ids/regex, `forbid: none`). Run 2: created 19,
+  accepted 0 (a prose `forbid:` line made the whole block "bad"). Both found by `conductor/rejected-YYYYMMDD.jsonl`
+  and the raw reply; fixed in the parser (commits 355fa7fd, 277c2192).
+- Run 3 (final code, 17 min, 6 model calls on star-fast slot 1): **created 18, accepted 8, rejected 10** (all 10: the
+  model's own reference failed its own require patterns). Pool 642 -> 650 tasks, 0 dropped, loaded by `validate-pool`.
+  Report: `/opt/star/learning/conductor/report-20261017.md` (copies of runs 1-2: run1-report.md, run2-report.md).
+- Deployed: app backup `app.bak-20261017-pre-conductor`; units in /etc/systemd/system; timer enabled, `*:10,40`.
+  The cycle takes about 17 minutes of star-fast; accept rate is limited by the model, not the validators.
+
+## Ideas not done
+- One repair round: feed a failed reference check back to the model once (probably doubles the accept rate).
+- Send the unaccepted-but-diagnosed clusters to the PC conductor / Codex for stronger tasks.
 
 ## Status log
+- 2026-10-17 15:50Z PR #476, deployed, first real cycle done.
