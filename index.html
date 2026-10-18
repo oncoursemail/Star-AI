@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#101113" />
+  <meta name="description" content="STAR AI's official public releases, Windows downloads, checksums and update information." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://api.github.com; img-src 'self' data:; base-uri 'none'; form-action 'none'" />
+  <title>STAR AI — Official Downloads</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="layout head-layout">
+      <a class="brand" href="./" aria-label="STAR AI home"><span class="brand-mark" aria-hidden="true">✳</span><span>STAR<span class="brand-accent"> AI</span></span></a>
+      <nav aria-label="Main navigation">
+        <a href="#downloads">Downloads</a>
+        <a href="#updates">Updates</a>
+        <a href="https://github.com/oncoursemail/Star-AI/issues">Support <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="layout">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> OFFICIAL DISTRIBUTION CHANNEL</p>
+      <h1 id="hero-title">Your AI.<br /><span class="hero-muted">Your workspace.</span></h1>
+      <p class="intro">STAR is a local-first AI desktop application. Its development happens privately. Official Windows releases, update information and downloads are published here.</p>
+      <div class="hero-actions">
+        <a class="primary-link" href="#downloads">View downloads <span aria-hidden="true">↗</span></a>
+        <a class="subtle-link" href="https://github.com/oncoursemail/Star-AI/releases">Release history <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+    <section class="release-section" id="downloads" aria-labelledby="download-heading">
+      <div class="section-heading">
+        <div>
+          <span class="index">01 / RELEASES</span>
+          <h2 id="download-heading">Get STAR for Windows</h2>
+        </div>
+        <span class="channel-tag">STABLE CHANNEL</span>
+      </div>
+      <div class="release-panel">
+        <div class="release-top">
+          <div><p class="overline">Release status</p><p class="release-state" id="release-state" role="status" aria-live="polite">Checking public releases…</p></div>
+          <div class="version-pill" id="release-version" aria-label="Latest public version">No version</div>
+        </div>
+        <p class="release-detail" id="release-detail">Only files published to the official public GitHub Releases page are offered here. No account or access to the private source is required.</p>
+        <div class="downloads-grid">
+          <div class="download-option">
+            <div class="option-number">01</div>
+            <h3>Windows installer</h3>
+            <p>Recommended for most people. Installs STAR and supports in-place upgrades.</p>
+            <a class="file-link disabled" id="setup-link" aria-disabled="true" tabindex="-1">Installer not available <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="download-option">
+            <div class="option-number">02</div>
+            <h3>Portable ZIP</h3>
+            <p>Run STAR without the standard installer. Extract it to a folder you control.</p>
+            <a class="file-link disabled" id="zip-link" aria-disabled="true" tabindex="-1">Portable build not available <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+        <div class="checksums"><span>INTEGRITY</span><p id="hash-state">Checksums will be available when a release is published.</p><a class="hash-link disabled" id="checksums-link" aria-disabled="true" tabindex="-1">SHA256SUMS.txt ↗</a></div>
+      </div>
+      <p class="fineprint">STAR currently targets Windows 11 (64-bit). The page reads GitHub's public release API and will never offer a download hosted on an unofficial mirror.</p>
+    </section>
+    <section class="details-section" id="updates" aria-labelledby="updates-heading">
+      <div class="section-heading">
+        <div><span class="index">02 / DELIVERY</span><h2 id="updates-heading">Built privately. Delivered transparently.</h2></div>
+      </div>
+      <div class="details-grid">
+        <article class="detail-item"><div class="detail-no">01</div><h3>Private development</h3><p>Source code, experiments and AI agent work remain in a private project. This site publishes distribution information, not private code.</p></article>
+        <article class="detail-item"><div class="detail-no">02</div><h3>Release quality</h3><p>Only approved release packages belong on this channel. Build checks, human review, and real Windows testing remain separate requirements.</p></article>
+        <article class="detail-item"><div class="detail-no">03</div><h3>Update safely</h3><p>The desktop updater checks the public release API, validates the expected installer filename, size and SHA-256 digest, and asks before installing.</p></article>
+      </div>
+    </section>
+    <section class="support-section"><div><p class="overline">Questions or problems?</p><h2>Help improve STAR.</h2></div><a href="https://github.com/oncoursemail/Star-AI/issues">Open a support issue <span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer class="layout footer"><span>© STAR AI</span><span>Official distribution • <a href="https://github.com/oncoursemail/Star-AI">GitHub</a></span></footer>
+</body>
+</html>
