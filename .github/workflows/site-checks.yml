@@ -1,0 +1,46 @@
+name: STAR Public Distribution Site Checks
+on:
+  push:
+    branches: [main]
+    paths: [README.md, index.html, styles.css, site.js, '.github/workflows/site-checks.yml']
+  pull_request:
+    paths: [README.md, index.html, styles.css, site.js, '.github/workflows/site-checks.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public-download-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Check static public download script
+        run: node --check site.js
+      - name: Validate distribution-only and fail-closed download links
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('index.html').read_text(encoding='utf-8')
+          js = Path('site.js').read_text(encoding='utf-8')
+          readme = Path('README.md').read_text(encoding='utf-8')
+          css = Path('styles.css').read_text(encoding='utf-8')
+          assert 'Star-AI-Private' not in js
+          assert 'https://api.github.com/repos/' in js
+          assert 'oncoursemail/Star-AI' in js
+          assert 'sha256:[0-9a-f]{64}' in js
+          assert 'findAsset' in js and 'displayWaiting' in js
+          assert 'github.com/oncoursemail/Star-AI/releases' in html
+          assert 'aria-disabled="true"' in html
+          assert 'Content-Security-Policy' in html
+          assert 'prefers-reduced-motion' in css
+          assert 'Migration in progress' in readme
+          assert '-----BEGIN PRIVATE KEY-----' not in ''.join((html, js, css, readme))
+          print('Public distribution page static checks passed')
+          PY
