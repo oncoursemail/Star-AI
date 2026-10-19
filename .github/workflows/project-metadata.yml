@@ -1,0 +1,79 @@
+name: STAR public release organization
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/project-metadata.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: star-public-metadata
+  cancel-in-progress: false
+jobs:
+  organize:
+    if: github.repository == 'oncoursemail/Star-AI' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Maintain labels and planned release milestones, never source or binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error, urllib.parse
+          ROOT = 'https://api.github.com/repos/oncoursemail/Star-AI'
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect())
+          def api(path='', method='GET', body=None):
+              data = json.dumps(body).encode() if body is not None else None
+              request = urllib.request.Request(ROOT + path, data=data, method=method,
+                  headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                      'Accept':'application/vnd.github+json','Content-Type':'application/json',
+                      'X-GitHub-Api-Version':'2022-11-28','User-Agent':'STAR-release-metadata'})
+              with opener.open(request, timeout=20) as response:
+                  raw = response.read(2000001)
+                  if len(raw)>2000000:
+                      raise RuntimeError('Metadata response exceeded limit')
+                  return json.loads(raw) if raw else None
+          repo = api()
+          if repo['id'] != 1424898960 or repo['private'] is not False:
+              raise RuntimeError('Unexpected public distribution repository identity')
+          labels = {
+              'actor:star-ai': ('5319e7','Only independently attributed Star AI runtime contributions; a label is not authentication.'),
+              'actor:chatgpt': ('0e8a16','Owner-directed work assisted by ChatGPT; not autonomous Star AI.'),
+              'actor:claude': ('a05a2c','Owner-declared Claude-assisted work; not autonomous Star AI.'),
+              'actor:unverified': ('b60205','Identity or execution evidence has not been verified.'),
+              'area:release': ('0052cc','Public binary distribution and update delivery.'),
+              'area:security': ('b60205','Security or credential-boundary work requiring review.'),
+              'stage:proposed': ('ededed','Proposal exists; no claim of tests, merge or release.'),
+              'stage:tested': ('c2e0c6','Linked test evidence exists for an exact revision; not release approval.'),
+              'stage:released': ('0e8a16','A public release exists with verified matching assets.'),
+              'blocked:authorization': ('d93f0b','Waiting for the owner to configure narrowly scoped access.')
+          }
+          for name, (color, description) in labels.items():
+              path = '/labels/' + urllib.parse.quote(name, safe='')
+              try:
+                  api(path)
+              except urllib.error.HTTPError as exc:
+                  if exc.code != 404:
+                      raise RuntimeError('Unable to inspect label; HTTP '+str(exc.code)) from None
+                  api('/labels','POST',{'name':name,'color':color,'description':description})
+          existing = []
+          for page in range(1, 6):
+              batch = api('/milestones?state=all&per_page=100&page='+str(page))
+              existing.extend(batch)
+              if len(batch)<100:
+                  break
+          else:
+              raise RuntimeError('Too many milestones to safely detect duplicates')
+          milestones = {
+              'v1.0.1 — Public update delivery': 'Planned: restore approved Windows releases and anonymous updates. Open does not mean released.',
+              'v1.1.0 — Verified AI activity': 'Planned: attributable, tested AI contributions and bounded improvement delivery. No intelligence-gain claim.'
+          }
+          for title, description in milestones.items():
+              if not any(item['title']==title for item in existing):
+                  api('/milestones','POST',{'title':title,'description':description,'state':'open'})
+          print('Public labels and planned milestones are configured. No releases, source, private data or credentials were published.')
